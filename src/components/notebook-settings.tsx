@@ -105,8 +105,8 @@ export function NotebookSettings({
                   one.
                 </p>
                 <p className="text-muted mt-2 text-sm">
-                  Your {notebook.title} sources are re-attached automatically. The messages so far
-                  are not carried over.
+                  Your sources are re-attached automatically. The messages so far are not carried
+                  over.
                 </p>
                 {error ? (
                   <p role="alert" className="text-danger mt-2 text-sm">

@@ -120,9 +120,11 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 - [x] `app/api/notebooks/[id]/sources/**` — GET list, POST upload, DELETE
 - [x] `app/api/notebooks/[id]/artifacts/**` — GET list, GET download
 - [x] Every handler opens with `requireUser()` **and** an ownership check — never trust a client `file_id`
-- [ ] **Verify:** curl the full flow with a real cookie; confirm a second user gets 404 on the first
-      user's notebook. **Blocked on `gcloud auth application-default login`** — the Admin SDK has no
-      credentials on this machine, so no route that touches Firestore or mints a cookie can run.
+- [x] **Verify:** `npm run verify:flow` — 16/16 against real Firestore and the real Anthropic API:
+      create, ownership boundary (a second uid gets NotFound on a real notebook id, and its artifact
+      ids are refused), upload, duplicate-filename refusal, a grounded answer citing its source, an
+      artifact written/listed/downloaded, source removal, the model-change reset, delete. The HTTP
+      layer was then walked in a browser with a real session cookie (see phase 6).
 
 ## Phase 6 — UI
 
@@ -135,8 +137,17 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 - [x] Upload via `DropZone` + `FileTrigger` from `react-aria-components` (already a HeroUI peer)
 - [x] Artifact list, preview, download
 - [x] "Changing the model starts a fresh conversation" confirm dialog
-- [ ] **Verify:** full flow in a browser; kill the network mid-stream and confirm the SSE cursor resumes
-      losslessly. **Blocked on `gcloud auth application-default login`** — same blocker as phase 5.
+- [x] **Verify:** full flow walked in Chrome against the real API, signed in with Google:
+      `/` gated → sign-in → create notebook (modal, model picker) → drag-target upload → grounded
+      answer citing `[lighthouse-survey.md]` → a correct "the survey does not cover that" → thinking
+      and Stop indicators → artifact appears on turn-complete → preview renders → download lands on
+      disk with the right filename and 1691 bytes → model-change confirm → delete confirm → deleted.
+      Afterwards the Anthropic workspace showed the source file gone and the session no longer
+      listed, i.e. archived — delete really does clean up both sides.
+- [x] **SSE resume verified.** With `SELF_CLOSE_MS` temporarily dropped to 6s, a long turn survived
+      repeated mid-answer reconnects: the answer arrived complete, the client showed
+      "Reconnecting…" each cycle, and the transcript had **zero duplicated blocks**. The constant is
+      back at 4 minutes.
 
 ### Notes
 
