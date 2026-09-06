@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "provision": "tsx --env-file=.env.local scripts/provision.ts",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "verify:flow": "tsx --conditions=react-server --env-file=.env.local scripts/verify-flow.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
