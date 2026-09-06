@@ -1,6 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
-import { requireUser } from "@/lib/auth/dal";
+import { getSessionUser } from "@/lib/auth/dal";
 import { NotFoundError } from "@/lib/notebooks/errors";
 import { requireNotebook } from "@/lib/notebooks/notebook-service";
 import { listSources } from "@/lib/notebooks/source-service";
@@ -9,7 +9,11 @@ import { AppNav } from "@/components/app-nav";
 import { NotebookWorkspace } from "@/components/notebook-workspace";
 
 export default async function NotebookPage({ params }: PageProps<"/notebooks/[id]">) {
-  const user = await requireUser();
+  // Pages render concurrently with their layout, so the gate is repeated here
+  // rather than assumed. Free the second time — getSessionUser is cached.
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+
   const { id } = await params;
 
   let notebook;

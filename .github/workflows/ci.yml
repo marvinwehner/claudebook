@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Must match engines.node and the App Hosting runtime.
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm run typecheck
+
+      - run: npm test
+
+      # `next build` reads NEXT_PUBLIC_* at build time. These are public values
+      # (the same ones in apphosting.yaml); the build never needs a secret,
+      # because ANTHROPIC_API_KEY and ALLOWED_EMAILS are RUNTIME-only and
+      # src/lib/config/env.ts validates lazily for exactly this reason.
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: AIzaSyCaiOgCU_4dPzkwBa2DkkQTJCeOqRA5Uxg
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: claudebook-lm.firebaseapp.com
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: claudebook-lm
+          NEXT_PUBLIC_FIREBASE_APP_ID: "1:428276124646:web:450dc028026fbc20b4a427"
