@@ -23,12 +23,12 @@ env:
     secret: anthropic-api-key
 
   - variable: ANTHROPIC_AGENT_ID
-    value: PLACEHOLDER_SET_BY_SCRIPTS_PROVISION
+    value: agent_01Jo4zPsLgxJMskAJjxNrfD5
     availability:
       - RUNTIME
 
   - variable: ANTHROPIC_ENVIRONMENT_ID
-    value: PLACEHOLDER_SET_BY_SCRIPTS_PROVISION
+    value: env_01U3GHJPwPyg8D4g9fSohJHP
     availability:
       - RUNTIME
 

@@ -75,19 +75,33 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 
 ## Phase 4 — Anthropic gateway + provisioning
 
-- [ ] `scripts/provision.ts` — idempotent find-or-create of the **one shared** environment and agent
+- [x] `scripts/provision.ts` — idempotent find-or-create of the **one shared** environment and agent
       **by name**; update the agent when committed config drifts; print `ANTHROPIC_AGENT_ID` /
       `ANTHROPIC_ENVIRONMENT_ID`
-- [ ] `lib/anthropic/client.ts` — SDK client, server-only
-- [ ] `lib/anthropic/agent.ts` — the committed agent config (model, toolset, system prompt)
-- [ ] `lib/anthropic/sessions.ts` — `ensureSession()` incl. **rehydration** (missing/terminated →
+- [x] `lib/anthropic/client.ts` — SDK client, server-only
+- [x] `lib/anthropic/agent.ts` — the committed agent config (model, toolset, system prompt)
+- [x] `lib/anthropic/sessions.ts` — `ensureSession()` incl. **rehydration** (missing/terminated →
       recreate + re-mount every source from Firestore); also backs "change this notebook's model"
-- [ ] `lib/anthropic/files.ts` — upload, `resources.add`/`delete`, artifact list via `scope_id` +
+- [x] `lib/anthropic/files.ts` — upload, `resources.add`/`delete`, artifact list via `scope_id` +
       `betas: ['managed-agents-2026-04-01']`, download
-- [ ] `lib/anthropic/events.ts` — `normalizeEvent()` + SSE cursor codec (`<createdAt>|<eventId>`)
-- [ ] Unit tests: `normalizeEvent`, cursor encode/decode
-- [ ] **Verify:** run `provision` twice — second run creates nothing. Scratch script: create session →
-      mount file → ask → streamed answer cites the file.
+- [x] `lib/anthropic/events.ts` — `normalizeEvent()` + SSE cursor codec (`<createdAt>|<eventId>`)
+- [x] Unit tests: `normalizeEvent`, cursor encode/decode (15 cases)
+- [x] **Verify:** `provision` run twice — second run created nothing and the agent stayed at v1
+      (`agent_01Jo4zPsLgxJMskAJjxNrfD5`, `env_01U3GHJPwPyg8D4g9fSohJHP`). Scratch script passed all
+      six checks: mounted file → grounded answer citing `[sundial-report.md]` → correctly refused a
+      question the source does not cover → wrote an artifact → listed it → downloaded it.
+
+### Corrections this phase forced (both found by running it, not by reading docs)
+
+- **A lone `system.message` is rejected.** It must be in the same request as, and immediately after,
+  a `user.message` / `user.tool_result` / `user.custom_tool_result`. So `ensureSession()` no longer
+  sends the rehydration note itself — it returns `seedNote`, and `sendUserMessage(id, text, note)`
+  pairs them. Phase 5 must persist `seedNote` on the notebook when rehydration happens on an upload
+  rather than a message, or the note is lost.
+- **`files.list({scope_id})` is not "outputs".** It returns the sources mounted into the session too,
+  and those are `downloadable: false`. `listArtifacts` filters on `downloadable === true`, and
+  retries on the *filtered* count — otherwise the mounted sources satisfy the retry immediately and
+  the real artifact is missed while indexing is still catching up.
 
 ## Phase 5 — domain services + API routes
 
