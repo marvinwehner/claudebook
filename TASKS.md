@@ -55,18 +55,23 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 
 ## Phase 3 — auth
 
-- [ ] `lib/firebase/admin.ts` — `initializeApp()` via ADC, no service-account JSON
-- [ ] `lib/firebase/client.ts` — Firebase **auth only**, no Firestore in the browser bundle
-- [ ] `lib/auth/allowlist.ts` — `ALLOWED_EMAILS` + optional `ALLOWED_DOMAINS`
-- [ ] `lib/auth/dal.ts` — `getSession()` in React `cache()`, `requireUser()`
-- [ ] `app/api/auth/session/route.ts` — POST: Origin check → `verifyIdToken` → require `google.com` +
+- [x] `lib/firebase/admin.ts` — `initializeApp()` via ADC, no service-account JSON
+- [x] `lib/firebase/client.ts` — Firebase **auth only**, no Firestore in the browser bundle
+- [x] `lib/auth/allowlist.ts` — `ALLOWED_EMAILS` + optional `ALLOWED_DOMAINS`
+- [x] `lib/auth/dal.ts` — `getSession()` in React `cache()`, `requireUser()`
+- [x] `app/api/auth/session/route.ts` — POST: Origin check → `verifyIdToken` → require `google.com` +
       `email_verified` → allowlist → `createSessionCookie` → `__session` (httpOnly/secure/lax/5d);
       403 + `deleteUser` on refusal. DELETE: revoke + clear.
-- [ ] `app/(app)/layout.tsx` — server component gate: `requireUser()` or `redirect('/login')`
-- [ ] `app/login/page.tsx` — `signInWithPopup`, handling `popup-blocked` / `popup-closed-by-user`
-- [ ] Unit test: `allowlist`
-- [ ] **Verify:** allowlisted account reaches `/`; non-allowlisted gets a clear refusal with no cookie
-      and no lingering Firebase user; `/api/*` returns 401 without a cookie
+- [x] `app/(app)/layout.tsx` — server component gate: `requireUser()` or `redirect('/login')`
+- [x] `app/login/page.tsx` — `signInWithPopup`, handling `popup-blocked` / `popup-closed-by-user`
+- [x] Unit test: `allowlist` (9 cases, incl. fail-closed on an empty allowlist and no suffix-matching
+      of domains)
+- [~] **Verify:** done without credentials — `/` with no cookie 307s to `/login`, `/login` renders,
+      `POST /api/auth/session` gives 403 with a missing or foreign Origin, 400 on a bad body and 401
+      on a malformed token. **Still to do:** a real Google sign-in, which needs
+      `gcloud auth application-default login` (no ADC on this machine yet) for `createSessionCookie`
+      and `deleteUser`, plus a human at the Google popup. Non-allowlisted refusal untested for the
+      same reason.
 
 ## Phase 4 — Anthropic gateway + provisioning
 

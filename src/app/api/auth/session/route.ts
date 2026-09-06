@@ -1,0 +1,113 @@
+import { cookies, headers } from "next/headers";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { isAllowedEmail } from "@/lib/auth/allowlist";
+import { SESSION_COOKIE, SESSION_MAX_AGE_MS } from "@/lib/auth/dal";
+import { adminAuth } from "@/lib/firebase/admin";
+
+const bodySchema = z.object({ idToken: z.string().min(1) });
+
+/**
+ * Same-origin check. The session cookie is SameSite=Lax, which already blocks
+ * cross-site POSTs, but this endpoint mints the cookie so it gets a second
+ * lock: a request with no Origin, or an Origin whose host disagrees with the
+ * Host we were reached on, is rejected.
+ */
+async function isSameOrigin(): Promise<boolean> {
+  const h = await headers();
+  const origin = h.get("origin");
+  if (!origin) return false;
+
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  if (!host) return false;
+
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+function cookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+  };
+}
+
+export async function POST(request: Request) {
+  if (!(await isSameOrigin())) {
+    return NextResponse.json({ error: "Cross-origin request refused." }, { status: 403 });
+  }
+
+  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Expected { idToken }." }, { status: 400 });
+  }
+
+  let claims;
+  try {
+    claims = await adminAuth().verifyIdToken(parsed.data.idToken, true);
+  } catch {
+    return NextResponse.json({ error: "Invalid or expired sign-in token." }, { status: 401 });
+  }
+
+  // Google is the only configured provider; anything else means someone found
+  // another way into the Identity Platform tenant.
+  const provider = claims.firebase?.sign_in_provider;
+  const acceptable =
+    provider === "google.com" && claims.email_verified === true && isAllowedEmail(claims.email);
+
+  if (!acceptable) {
+    // Leave no account behind. A refused sign-in still created a Firebase user
+    // record — delete it so the tenant only ever holds allowlisted people.
+    //
+    // Consequence worth knowing: removing an address from ALLOWED_EMAILS and
+    // having that person sign in again deletes their uid, which orphans any
+    // notebooks keyed to it. For an invite-only app that is the intended
+    // meaning of "revoked".
+    await adminAuth()
+      .deleteUser(claims.uid)
+      .catch(() => {
+        /* best effort — the refusal matters more than the cleanup */
+      });
+
+    return NextResponse.json(
+      { error: "This Google account is not on the Claudebook allowlist." },
+      { status: 403 },
+    );
+  }
+
+  const sessionCookie = await adminAuth().createSessionCookie(parsed.data.idToken, {
+    expiresIn: SESSION_MAX_AGE_MS,
+  });
+
+  (await cookies()).set(SESSION_COOKIE, sessionCookie, {
+    ...cookieOptions(),
+    maxAge: SESSION_MAX_AGE_MS / 1000,
+  });
+
+  return NextResponse.json({ uid: claims.uid, email: claims.email });
+}
+
+export async function DELETE() {
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+
+  if (token) {
+    // Revoke refresh tokens so every other session for this user dies too —
+    // verifySessionCookie(_, true) in the DAL picks that up on the next request.
+    await adminAuth()
+      .verifySessionCookie(token, false)
+      .then((claims) => adminAuth().revokeRefreshTokens(claims.sub))
+      .catch(() => {
+        /* already invalid; clearing the cookie is still the right outcome */
+      });
+  }
+
+  store.set(SESSION_COOKIE, "", { ...cookieOptions(), maxAge: 0 });
+  return NextResponse.json({ ok: true });
+}
