@@ -21,8 +21,6 @@ env:
   # browser bundle.
   - variable: ANTHROPIC_API_KEY
     secret: anthropic-api-key
-    availability:
-      - RUNTIME
 
   - variable: ANTHROPIC_AGENT_ID
     value: PLACEHOLDER_SET_BY_SCRIPTS_PROVISION
@@ -44,7 +42,7 @@ env:
   # by design; the security boundary is Firebase Auth + our server-side
   # ownership checks, not secrecy of these values.
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: PLACEHOLDER_FROM_FIREBASE_APPS_SDKCONFIG
+    value: AIzaSyCaiOgCU_4dPzkwBa2DkkQTJCeOqRA5Uxg
     availability:
       - BUILD
       - RUNTIME
@@ -62,7 +60,7 @@ env:
       - RUNTIME
 
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: PLACEHOLDER_FROM_FIREBASE_APPS_SDKCONFIG
+    value: "1:428276124646:web:450dc028026fbc20b4a427"
     availability:
       - BUILD
       - RUNTIME

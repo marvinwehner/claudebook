@@ -9,21 +9,24 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 
 ## Phase 0 — manual prerequisites (browser only, not automatable)
 
-- [!] Enable **billing (Blaze plan)** on `claudebook-lm` — hard blocker for App Hosting, Cloud Build,
-      Cloud Run, Secret Manager. Nothing in phase 7 works until this is done.
-- [!] Firebase console → Authentication → Sign-in method → **enable Google**, set a support email.
+- [x] Enable **billing (Blaze plan)** on `claudebook-lm` — done 2026-09-06; verified with
+      `gcloud billing projects describe`.
+- [x] Firebase console → Authentication → Sign-in method → **enable Google**, set a support email.
 - [!] Phase 7 only: authorise the Firebase GitHub App when `apphosting:backends:create` opens a browser.
 
-## Phase 0b — CLI provisioning (agent-runnable, but needs Blaze first)
+## Phase 0b — CLI provisioning
 
-- [ ] `gcloud services enable` — firebaseapphosting, developerconnect, cloudbuild, run,
+- [x] `gcloud services enable` — firebaseapphosting, developerconnect, cloudbuild, run,
       artifactregistry, secretmanager, iam, iamcredentials, firestore
-- [ ] `gcloud firestore databases create --location=eur3`
-- [ ] `firebase apps:create web claudebook` → capture the public client config
-- [ ] `firebase apphosting:secrets:set anthropic-api-key`
-- [ ] Grant `roles/iam.serviceAccountTokenCreator` to `firebase-app-hosting-compute@…` **on itself**
-      (required for `createSessionCookie` under ADC)
+- [x] `gcloud firestore databases create --location=eur3` — `(default)`, eur3, FIRESTORE_NATIVE
+- [x] `firebase apps:create web claudebook` → app ID `1:428276124646:web:450dc028026fbc20b4a427`;
+      config written into `apphosting.yaml` and `.env.local`
+- [x] `firebase apphosting:secrets:set anthropic-api-key` → version 1, value verified by round-trip
 - [x] `npm i -g firebase-tools@latest` — already at 15.29.0, nothing to do
+- [→] Grant `roles/iam.serviceAccountTokenCreator` to `firebase-app-hosting-compute@…` **on itself**
+      — **moved to phase 7**: that service account does not exist until `apphosting:backends:create`
+      creates it (`NOT_FOUND: Unknown service account`). Still required before `createSessionCookie`
+      works in production.
 
 ## Phase 1 — plan + board
 
@@ -47,9 +50,8 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 - [x] `src/lib/config/env.ts` — zod-validated **lazily**; `ALLOWED_EMAILS` is RUNTIME-only and absent
       during `next build`, so validating at module scope breaks the build
 - [x] `engines.node: "22"`, lock file committed (App Hosting fails the build without one)
-- [~] **Verify:** `npm run build` + `npm run lint` + `tsc --noEmit` pass. `firebase deploy --only
-      firestore` is **blocked on phase 0b** (no Firestore database yet); rules syntax was validated
-      instead with `firebase emulators:exec --only firestore`.
+- [x] **Verify:** `npm run build` + `npm run lint` + `tsc --noEmit` pass; `firebase deploy --only
+      firestore` succeeded (rules released, index built).
 
 ## Phase 3 — auth
 
@@ -122,6 +124,9 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
       the UI depends on it (see the open risk in PLAN.md)
 - [ ] `firebase apphosting:backends:create --location europe-west4` (browser step)
 - [ ] `firebase apphosting:secrets:grantaccess anthropic-api-key --backend <id>`
+- [ ] Grant `roles/iam.serviceAccountTokenCreator` on `firebase-app-hosting-compute@claudebook-lm`
+      **to itself** (moved here from phase 0b — the SA is created by `backends:create`). Without it
+      `createSessionCookie` fails under ADC, so sign-in breaks in production only.
 - [ ] First rollout; confirm auto-deploy on push to `main`
 - [ ] Add `<backend>--claudebook-lm.europe-west4.hosted.app` to Firebase Auth authorized domains —
       **verify whether this is automatic**; symptom if missing is `auth/unauthorized-domain`
