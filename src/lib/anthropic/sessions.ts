@@ -57,6 +57,22 @@ async function retrieve(sessionId: string): Promise<Session | null> {
 }
 
 /**
+ * Hard spend ceiling per notebook session, in minor units — "5000" is $50.00.
+ *
+ * A budget is create-only: it can be raised, lowered or removed on a live
+ * session, but never added to one that was created without it. So it rides on
+ * every session we create, including the ones `ensureSession` rebuilds.
+ *
+ * At the cap the session pauses `idle` with `stop_reason: "budget_reached"`
+ * rather than terminating — history and its sandbox survive, and raising the cap
+ * resumes it. Until then anything that starts new work is rejected with a 400.
+ */
+const SESSION_BUDGET: Anthropic.Beta.Sessions.BetaManagedAgentsBudgetLimit = {
+  type: "limit",
+  max_list_cost: { amount: "5000", currency: "USD" },
+};
+
+/**
  * Creates a session for a notebook and mounts every source it already has.
  *
  * The per-notebook model and custom instructions ride on `agent_with_overrides`
@@ -90,6 +106,7 @@ export async function createSession(spec: SessionSpec): Promise<{
       mount_path: mountPathFor(source.filename),
     })),
     metadata: { notebook_id: spec.notebookId },
+    budget: SESSION_BUDGET,
   });
 
   // Sessions list resources in the order they were attached, so this lines up

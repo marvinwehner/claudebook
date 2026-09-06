@@ -53,8 +53,11 @@ export async function createNotebook(
     customInstructions: input.customInstructions?.trim() || undefined,
   });
 
-  // The session is provisioned eagerly so the first message is not the thing
-  // that pays for container start-up. It costs nothing while idle.
+  // Created up front so the notebook has a session id from the moment it exists
+  // — not to pre-warm anything. A session created without `initial_events` is
+  // only registered; its container comes up when the session first needs it, so
+  // the first message still pays for start-up. Idle costs nothing either way:
+  // runtime is metered on active seconds, and an idle session has none.
   const { session } = await ensureSession(null, specFor(notebook, []));
   await notebooks.updateNotebook(notebook.id, {
     sessionId: session.id,
