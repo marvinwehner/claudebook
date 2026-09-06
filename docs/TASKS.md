@@ -24,9 +24,9 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 - [x] `firebase apphosting:secrets:set anthropic-api-key` → version 1, value verified by round-trip
 - [x] `npm i -g firebase-tools@latest` — already at 15.29.0, nothing to do
 - [→] Grant `roles/iam.serviceAccountTokenCreator` to `firebase-app-hosting-compute@…` **on itself**
-      — **moved to phase 7**: that service account does not exist until `apphosting:backends:create`
-      creates it (`NOT_FOUND: Unknown service account`). Still required before `createSessionCookie`
-      works in production.
+  — **moved to phase 7**: that service account does not exist until `apphosting:backends:create`
+  creates it (`NOT_FOUND: Unknown service account`). Still required before `createSessionCookie`
+  works in production.
 
 ## Phase 1 — plan + board
 
@@ -51,7 +51,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
       during `next build`, so validating at module scope breaks the build
 - [x] `engines.node: "22"`, lock file committed (App Hosting fails the build without one)
 - [x] **Verify:** `npm run build` + `npm run lint` + `tsc --noEmit` pass; `firebase deploy --only
-      firestore` succeeded (rules released, index built).
+    firestore` succeeded (rules released, index built).
 
 ## Phase 3 — auth
 
@@ -67,11 +67,11 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 - [x] Unit test: `allowlist` (9 cases, incl. fail-closed on an empty allowlist and no suffix-matching
       of domains)
 - [~] **Verify:** done without credentials — `/` with no cookie 307s to `/login`, `/login` renders,
-      `POST /api/auth/session` gives 403 with a missing or foreign Origin, 400 on a bad body and 401
-      on a malformed token. **Still to do:** a real Google sign-in, which needs
-      `gcloud auth application-default login` (no ADC on this machine yet) for `createSessionCookie`
-      and `deleteUser`, plus a human at the Google popup. Non-allowlisted refusal untested for the
-      same reason.
+  `POST /api/auth/session` gives 403 with a missing or foreign Origin, 400 on a bad body and 401
+  on a malformed token. **Still to do:** a real Google sign-in, which needs
+  `gcloud auth application-default login` (no ADC on this machine yet) for `createSessionCookie`
+  and `deleteUser`, plus a human at the Google popup. Non-allowlisted refusal untested for the
+  same reason.
 
 ## Phase 4 — Anthropic gateway + provisioning
 
@@ -100,7 +100,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
   rather than a message, or the note is lost.
 - **`files.list({scope_id})` is not "outputs".** It returns the sources mounted into the session too,
   and those are `downloadable: false`. `listArtifacts` filters on `downloadable === true`, and
-  retries on the *filtered* count — otherwise the mounted sources satisfy the retry immediately and
+  retries on the _filtered_ count — otherwise the mounted sources satisfy the retry immediately and
   the real artifact is missed while indexing is still catching up.
 
 ## Phase 5 — domain services + API routes
@@ -153,11 +153,11 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 
 - `normalizeEvent` now renders the echoed `user.message` too. Without it a reload showed the
   assistant's half of the conversation and none of the user's — we keep no second copy of the
-  transcript, so the echo *is* the record.
+  transcript, so the echo _is_ the record.
 - The mount guard uses `useSyncExternalStore` rather than `useEffect(() => setMounted(true))`;
   React 19's `set-state-in-effect` rule rejects the older idiom.
 - Added `prettier` (printWidth 100, matching how the code was already written) and an `npm run
-  format` script.
+format` script.
 
 ## Phase 7 — deploy
 
@@ -169,19 +169,50 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 - [x] Grant `roles/iam.serviceAccountTokenCreator` on `firebase-app-hosting-compute@claudebook-lm`
       to itself. **Probably unnecessary** — see the correction below — but harmless, so it stands
       until a production sign-in proves it either way.
-- [!] **Link the GitHub repository.** Run non-interactively, `backends:create` silently skipped the
-      Developer Connect step, so the backend has no repository and no rollout can be created
-      (`rollouts:create` takes a git branch or commit). `gcloud beta developer-connect connections
-      list` returns nothing, and there is no `backends:update`. Fix: delete the empty backend and
-      re-create it interactively so the GitHub App authorization prompt appears.
+- [x] **Link the GitHub repository.** Run non-interactively, `backends:create` silently skipped the
+      Developer Connect step, so the backend had no repository and no rollout could be created
+      (`rollouts:create` takes a git branch or commit), and there is no `backends:update` to add one
+      afterwards. Fixed by deleting the empty backend and re-creating it **interactively**, which
+      prompts for GitHub App authorization. Now linked to `mavonic/claudebook`, branch `main`.
 - [ ] **Spike:** deploy a trivial SSE route and confirm App Hosting does not buffer it
-- [ ] First rollout; confirm auto-deploy on push to `main`
-- [ ] Add `<backend>--claudebook-lm.europe-west4.hosted.app` to Firebase Auth authorized domains —
-      **verify whether this is automatic**; symptom if missing is `auth/unauthorized-domain`
+- [x] First rollout — "Rollout complete", serving at the URL above.
+- [ ] Confirm auto-deploy fires on push to `main`
+- [x] Add `claudebook--claudebook-lm.europe-west4.hosted.app` to Firebase Auth authorized domains.
+      **It is not automatic** — PLAN.md flagged this as a risk and was right. Added additively via
+      the Identity Toolkit admin API under ADC; the list is now localhost, `*.firebaseapp.com`,
+      `*.web.app`, and the App Hosting domain.
 - [x] `.github/workflows/ci.yml` — lint + typecheck + test + build on pull requests
       (done early: it needs nothing from the deploy)
 - [ ] **Verify in prod:** sign in → create notebook → upload a PDF → grounded question → generate an
       artifact → download → delete, confirming the session is archived and its files removed
+
+### Security — GitHub secret-scanning alert (2026-09-06)
+
+GitHub flagged a "Google API Key" in `apphosting.yaml#L45` (commit `804d279`) while the repo was
+**public**. Audited every blob in every commit: the finding is the **Firebase Web API key**, and it
+is the only credential-shaped value ever committed.
+
+- [x] **Confirmed `ANTHROPIC_API_KEY` was never committed.** The only `sk-ant-` string in history is
+      the `sk-ant-api03-...` placeholder in `.env.local.example`. `.env.local` is untracked and
+      matched by `.gitignore:28`. No stash, no unreachable blob, no service-account JSON, no private
+      key, no npm credential anywhere in history. **No rotation, no history rewrite.**
+- [x] **Not rotating the Firebase key.** A Firebase web API key is a public project identifier — it
+      ships in the browser bundle to every visitor, so purging it from git would not make it secret.
+      It is safe here because email/password and anonymous sign-in are both disabled, `ALLOWED_EMAILS`
+      gates session-cookie creation, and `firestore.rules` is flat default-deny.
+- [x] **Restricted the key by HTTP referrer** — the one thing that was genuinely missing. It had
+      `browserKeyRestrictions: {}` (usable from anywhere) while permitting `identitytoolkit` and
+      `securetoken`. Now limited to the App Hosting domain, `*.firebaseapp.com` (needed because sign-in
+      uses `signInWithPopup`, whose OAuth handler runs there), `*.web.app`, and localhost.
+      Verified: allowed referrers 200, `evil.example.com` 403, no-referrer 403.
+      **Patch with `updateMask=restrictions.browserKeyRestrictions`** — `browserKeyRestrictions` is a
+      oneof but `apiTargets` is a sibling field, so an unscoped update silently wipes all 27 targets.
+      Needed `gcloud services enable apikeys.googleapis.com` first.
+- [ ] **Blocker before making the repo public again:** `marvin.wehner@gmx.de` is in four tracked
+      files (`apphosting.yaml`, `apphosting.emulator.yaml`, `.env.local.example`,
+      `src/lib/auth/allowlist.test.ts`). Not a credential, but public means scraped, and it names the
+      exact account an attacker must compromise to pass the allowlist. Move `ALLOWED_EMAILS` to
+      Secret Manager alongside `anthropic-api-key`, and use a fake address in the test and example.
 
 ### Corrections to PLAN.md found in this phase
 
@@ -192,6 +223,30 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
   `createCustomToken` uses the crypto signer. The grant is applied anyway as cheap insurance, but the
   stated reason for it is wrong.
 
+## Phase 8 — session spend cap
+
+- [x] **Un-deferred: every session is created with a $50 budget.** `createSession` now sends
+      `budget: {type: "limit", max_list_cost: {amount: "5000", currency: "USD"}}`, so it applies to
+      new notebooks _and_ to the sessions `ensureSession` rebuilds after one disappears.
+      Sessions created before this change stay uncapped forever — a budget is **create-only**, and
+      adding one to a live session is a 400. They only gain the cap once they rehydrate or the
+      notebook's model changes, both of which create a new session.
+- [ ] **Surface `budget_reached` in the UI.** At the cap the session pauses `idle` — it is not
+      terminated, history and sandbox survive — and rejects `user.message` with a 400 until the cap
+      is raised or removed. Today that surfaces as a generic send failure. Needs a distinct state,
+      and a decision on who may raise a cap (removal is one-way: a removed budget can never be
+      re-added).
+
+### Correction this phase forced
+
+- **Eagerly creating a session does not pre-warm its container.** The comment in `createNotebook`
+  claimed the eager create meant "the first message is not the thing that pays for container
+  start-up". It isn't: a session created without `initial_events` is only _registered_, and the
+  sandbox comes up when the session first needs it — so the first message still pays. The eager
+  create is still worth keeping, for the stable session id, but the stated reason was wrong.
+  (The other half of the comment was right: idle sessions bill nothing. Runtime is metered on
+  `usage.active_seconds` — time with ≥1 thread running — at $0.08/hour.)
+
 ---
 
 ## Deferred (explicitly out of scope for v1)
@@ -200,4 +255,3 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
   would need a Cloud Storage mirror)
 - NotebookLM "Studio" one-click generators (study guide, briefing doc, FAQ, timeline, mind map)
 - Sharing notebooks between users
-- Per-session spend budgets (create-only and removal is one-way, so adding later means a new session)

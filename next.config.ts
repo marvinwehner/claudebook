@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["firebase-admin"],
   // Deliberately NOT set: `cacheComponents`. Firebase App Hosting does not
   // support Cache Components or the Next 16 Proxy (`proxy.ts`) — auth gating
-  // lives in server components instead. See PLAN.md.
+  // lives in server components instead. See docs/PLAN.md.
 };
 
 export default nextConfig;

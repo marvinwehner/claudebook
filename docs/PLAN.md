@@ -22,20 +22,20 @@ contradict what a 2025-era tutorial would tell you.
 
 ### Anthropic
 
-| Claudebook concept | Anthropic object | Cardinality |
-|---|---|---|
-| Notebook behaviour/persona | **Agent** (`/v1/agents`) | **one, shared, versioned** |
-| Sandbox template | **Environment** (`/v1/environments`) | **one, shared** |
-| A notebook | **Session** (`/v1/sessions`) | **one per notebook**, long-lived |
-| A source | Files API upload + `sessions.resources.add` | ≤ 500 per session |
-| Chat transcript | session event history | — |
-| An artifact | file the agent writes to `/mnt/session/outputs/` | — |
+| Claudebook concept         | Anthropic object                                 | Cardinality                      |
+| -------------------------- | ------------------------------------------------ | -------------------------------- |
+| Notebook behaviour/persona | **Agent** (`/v1/agents`)                         | **one, shared, versioned**       |
+| Sandbox template           | **Environment** (`/v1/environments`)             | **one, shared**                  |
+| A notebook                 | **Session** (`/v1/sessions`)                     | **one per notebook**, long-lived |
+| A source                   | Files API upload + `sessions.resources.add`      | ≤ 500 per session                |
+| Chat transcript            | session event history                            | —                                |
+| An artifact                | file the agent writes to `/mnt/session/outputs/` | —                                |
 
 - Managed Agents beta is **live on this workspace** (`GET /v1/agents` → `200 {"data":[]}`).
-- **One deliberate deviation from the brief — verified, not assumed.** You asked for an Agent *and*
+- **One deliberate deviation from the brief — verified, not assumed.** You asked for an Agent _and_
   Environment per notebook. The isolation you want is already guaranteed by the **Session**. Verbatim
-  from the environments doc: *"Multiple sessions can share the same environment, but each session gets
-  its own isolated sandbox (a fresh Linux container)"* and *"Sessions do not share filesystem state."*
+  from the environments doc: _"Multiple sessions can share the same environment, but each session gets
+  its own isolated sandbox (a fresh Linux container)"_ and _"Sessions do not share filesystem state."_
   Three further facts make one-environment-per-notebook actively worse: environments are **not
   versioned**; an environment can only be **deleted if no session references it**, so per-notebook
   environments accumulate as permanently undeletable objects; and `packages` are **cached across
@@ -43,27 +43,27 @@ contradict what a 2025-era tutorial would tell you.
   explicitly documented anti-pattern (orphaned objects, create latency, defeats versioning).
   Per-notebook variation (model, custom instructions) uses `agent_with_overrides` at session-create —
   session-local, creates no new agent version.
-  *If a notebook ever needs different packages or a locked-down `networking` policy, that is the one
-  reason to add a second named environment — a per-profile environment, still not per-notebook.*
+  _If a notebook ever needs different packages or a locked-down `networking` policy, that is the one
+  reason to add a second named environment — a per-profile environment, still not per-notebook._
 - `client.files.upload({ file })` — the Files API is **out of beta** and has **no `purpose` parameter**
   (docs that mention `purpose: "agent"` / `"agent_resource"` are stale).
 - `mount_path: "/sources/x.pdf"` lands at `/mnt/session/uploads/sources/x.pdf`, **read-only**.
   Session-scoped copies do not count against storage quota.
-- **Files can be added to and removed from a *running* session**: `sessions.resources.add(sessionId,
-  {type:'file', file_id})` → `sesrsc_…`; `sessions.resources.delete(resourceId, {session_id})`.
+- **Files can be added to and removed from a _running_ session**: `sessions.resources.add(sessionId,
+{type:'file', file_id})` → `sesrsc_…`; `sessions.resources.delete(resourceId, {session_id})`.
 - **Uploaded files are not downloadable** (`downloadable: false`) — only agent-written outputs are.
   Hence the "Anthropic Files only" decision: no in-app source viewer.
 - Outputs: `client.beta.files.list({ scope_id: sessionId, betas: ['managed-agents-2026-04-01'] })`
   then `client.files.download(id)`. Indexing lags the idle event a few seconds — retry once or twice.
-- **Files are workspace-scoped, not user-scoped.** Anthropic's docs: *"Never accept `file_id` values
-  from end users."* Ownership is ours to enforce, in Firestore, server-side, on every request.
+- **Files are workspace-scoped, not user-scoped.** Anthropic's docs: _"Never accept `file_id` values
+  from end users."_ Ownership is ours to enforce, in Firestore, server-side, on every request.
 - SSE has **no replay**. `GET /v1/sessions/{id}/events` accepts (probed live against the API):
   `created_at[gt|gte|lt|lte]`, `limit`, `order`, `page`, `types[]` — so resume-after-disconnect is a
   cheap timestamp query, and we can subscribe to only the event types we render.
 - `GET /v1/sessions` filters by `agent_id`, `statuses[]`, `created_at[…]` — **no metadata filter**, so
   Firestore must be the user→notebook→session index.
 - Turn-complete gate: `session.status_idle` where `stop_reason.type !== 'requires_action'`.
-- Cost: tokens + web search + **$0.08/h of *active* time only**. Idle notebooks cost nothing.
+- Cost: tokens + web search + **$0.08/h of _active_ time only**. Idle notebooks cost nothing.
 
 ### Firebase / Next.js / App Hosting
 
@@ -127,7 +127,7 @@ contradict what a 2025-era tutorial would tell you.
   the Next 16.2 Deployment Adapter API "our new baseline for stability" for App Hosting. The two
   unsupported features (Proxy, Cache Components) are ones we actively don't want.
 - **`streamdown` for chat markdown.** We opt into live previews (`event_deltas: ['agent.message']`), so
-  the renderer receives *incomplete* markdown — half-open code fences, dangling `**`. Streamdown repairs
+  the renderer receives _incomplete_ markdown — half-open code fences, dangling `**`. Streamdown repairs
   that and memoises per block; hand-rolling it goes badly. Cost: ~30 lines of CSS mapping its
   shadcn-style tokens onto HeroUI's. Skip `@streamdown/code`/shiki until code blocks actually matter.
 - **The browser never talks to Firestore or Anthropic directly.** It holds a Firebase Auth session
@@ -151,13 +151,13 @@ Browser ──__session cookie──► Next.js on Cloud Run (App Hosting, europ
 
 ### Layering
 
-| Layer | Path | Responsibility |
-|---|---|---|
-| Route handlers | `src/app/api/**/route.ts` | HTTP only: auth, zod-validate, call a service, map errors |
-| Services | `src/lib/notebooks/*.ts` | Domain logic; the only place Firestore and Anthropic combine |
-| Repositories | `src/lib/firestore/*.ts` | Typed Firestore access + converters |
-| Anthropic gateway | `src/lib/anthropic/*.ts` | Thin typed wrapper over the SDK; provisioning; event normalisation |
-| Auth | `src/lib/auth/*.ts` | `server-only` DAL, allowlist, session cookie mint/verify |
+| Layer             | Path                      | Responsibility                                                     |
+| ----------------- | ------------------------- | ------------------------------------------------------------------ |
+| Route handlers    | `src/app/api/**/route.ts` | HTTP only: auth, zod-validate, call a service, map errors          |
+| Services          | `src/lib/notebooks/*.ts`  | Domain logic; the only place Firestore and Anthropic combine       |
+| Repositories      | `src/lib/firestore/*.ts`  | Typed Firestore access + converters                                |
+| Anthropic gateway | `src/lib/anthropic/*.ts`  | Thin typed wrapper over the SDK; provisioning; event normalisation |
+| Auth              | `src/lib/auth/*.ts`       | `server-only` DAL, allowlist, session cookie mint/verify           |
 
 Rule: a route handler never imports the Anthropic SDK or `firebase-admin` directly.
 

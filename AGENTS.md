@@ -121,8 +121,8 @@ Two habits the lint rules reject, both with clean fixes rather than suppressions
 
 ## Where the plan lives
 
-- `PLAN.md` — the settled why/what. **If you think a decision is wrong, say so and stop. Do not
+- `docs/PLAN.md` — the settled why/what. **If you think a decision is wrong, say so and stop. Do not
   quietly re-decide.**
-- `TASKS.md` — the mutable board, and the only state that survives into a new session. Tick items as
+- `docs/TASKS.md` — the mutable board, and the only state that survives into a new session. Tick items as
   they land, and record it there when reality contradicts the plan. It has, several times; that is
   normal and worth writing down rather than routing around.
