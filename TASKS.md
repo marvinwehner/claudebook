@@ -160,7 +160,8 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 - [ ] First rollout; confirm auto-deploy on push to `main`
 - [ ] Add `<backend>--claudebook-lm.europe-west4.hosted.app` to Firebase Auth authorized domains —
       **verify whether this is automatic**; symptom if missing is `auth/unauthorized-domain`
-- [ ] `.github/workflows/ci.yml` — lint + typecheck + build on pull requests
+- [x] `.github/workflows/ci.yml` — lint + typecheck + test + build on pull requests
+      (done early: it needs nothing from the deploy)
 - [ ] **Verify in prod:** sign in → create notebook → upload a PDF → grounded question → generate an
       artifact → download → delete, confirming the session is archived and its files removed
 
