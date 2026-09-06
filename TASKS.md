@@ -23,7 +23,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 - [ ] `firebase apphosting:secrets:set anthropic-api-key`
 - [ ] Grant `roles/iam.serviceAccountTokenCreator` to `firebase-app-hosting-compute@…` **on itself**
       (required for `createSessionCookie` under ADC)
-- [ ] `npm i -g firebase-tools@latest` (local is 15.12.0, need ≥15.29.0)
+- [x] `npm i -g firebase-tools@latest` — already at 15.29.0, nothing to do
 
 ## Phase 1 — plan + board
 
@@ -32,22 +32,24 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 
 ## Phase 2 — scaffold + infrastructure config
 
-- [ ] `create-next-app`: Next 16, TS, App Router, Tailwind 4, `src/`, `@/*`; strip boilerplate
-- [ ] Deps: `@heroui/react` + `@heroui/styles` (identical exact versions), `next-themes`, `streamdown`,
+- [x] `create-next-app`: Next 16, TS, App Router, Tailwind 4, `src/`, `@/*`; strip boilerplate
+- [x] Deps: `@heroui/react` + `@heroui/styles` (identical exact versions), `next-themes`, `streamdown`,
       `zod`, `firebase`, `firebase-admin`, `@anthropic-ai/sdk`
-- [ ] `globals.css`: `@import "tailwindcss"` → `@import "@heroui/styles"` → streamdown `@source`
+- [x] `globals.css`: `@import "tailwindcss"` → `@import "@heroui/styles"` → streamdown `@source`
       → HeroUI-token shim for streamdown's shadcn-style variables
-- [ ] `next.config.ts`: `serverExternalPackages: ['firebase-admin']`; **no** `cacheComponents`, **no**
+- [x] `next.config.ts`: `serverExternalPackages: ['firebase-admin']`; **no** `cacheComponents`, **no**
       `proxy.ts` (neither is supported on App Hosting)
-- [ ] `apphosting.yaml` — cpu 1 / 1024 MiB / concurrency 20 / maxInstances 10;
+- [x] `apphosting.yaml` — cpu 1 / 1024 MiB / concurrency 20 / maxInstances 10;
       `ANTHROPIC_API_KEY` RUNTIME-only secret; `NEXT_PUBLIC_FIREBASE_*` BUILD+RUNTIME
-- [ ] `apphosting.emulator.yaml`, `firebase.json` (firestore + emulators), `.firebaserc`
-- [ ] `firestore.rules` — flat default-deny (the client never touches Firestore)
-- [ ] `firestore.indexes.json` — `notebooks` on `(ownerId ASC, updatedAt DESC)`
-- [ ] `src/lib/config/env.ts` — zod-validated **lazily**; `ALLOWED_EMAILS` is RUNTIME-only and absent
+- [x] `apphosting.emulator.yaml`, `firebase.json` (firestore + emulators), `.firebaserc`
+- [x] `firestore.rules` — flat default-deny (the client never touches Firestore)
+- [x] `firestore.indexes.json` — `notebooks` on `(ownerId ASC, updatedAt DESC)`
+- [x] `src/lib/config/env.ts` — zod-validated **lazily**; `ALLOWED_EMAILS` is RUNTIME-only and absent
       during `next build`, so validating at module scope breaks the build
-- [ ] `engines.node: "22"`, lock file committed (App Hosting fails the build without one)
-- [ ] **Verify:** `npm run build` + `npm run lint` pass; `firebase deploy --only firestore` succeeds
+- [x] `engines.node: "22"`, lock file committed (App Hosting fails the build without one)
+- [~] **Verify:** `npm run build` + `npm run lint` + `tsc --noEmit` pass. `firebase deploy --only
+      firestore` is **blocked on phase 0b** (no Firestore database yet); rules syntax was validated
+      instead with `firebase emulators:exec --only firestore`.
 
 ## Phase 3 — auth
 

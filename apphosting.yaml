@@ -1,0 +1,68 @@
+# Firebase App Hosting — production backend config.
+#
+# Env vars set in the Firebase console SILENTLY OVERRIDE this file. Keep every
+# setting here and nowhere else.
+#
+# Secrets are pinned at build time: rotating one needs a new rollout, not just
+# an `apphosting:secrets:set`.
+
+runConfig:
+  cpu: 1
+  memoryMiB: 1024
+  # Every open SSE stream holds a Cloud Run concurrency slot for its lifetime.
+  # Keep concurrency low so long streams cannot starve normal SSR.
+  concurrency: 20
+  maxInstances: 10
+  minInstances: 0
+
+env:
+  # --- Server-only ------------------------------------------------------
+  # RUNTIME-only: the Anthropic key must never reach a build artifact or the
+  # browser bundle.
+  - variable: ANTHROPIC_API_KEY
+    secret: anthropic-api-key
+    availability:
+      - RUNTIME
+
+  - variable: ANTHROPIC_AGENT_ID
+    value: PLACEHOLDER_SET_BY_SCRIPTS_PROVISION
+    availability:
+      - RUNTIME
+
+  - variable: ANTHROPIC_ENVIRONMENT_ID
+    value: PLACEHOLDER_SET_BY_SCRIPTS_PROVISION
+    availability:
+      - RUNTIME
+
+  - variable: ALLOWED_EMAILS
+    value: marvin.wehner@gmx.de
+    availability:
+      - RUNTIME
+
+  # --- Public Firebase client config ------------------------------------
+  # Needed at BUILD (bundled into client JS) and at RUNTIME. These are public
+  # by design; the security boundary is Firebase Auth + our server-side
+  # ownership checks, not secrecy of these values.
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: PLACEHOLDER_FROM_FIREBASE_APPS_SDKCONFIG
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: claudebook-lm.firebaseapp.com
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: claudebook-lm
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: PLACEHOLDER_FROM_FIREBASE_APPS_SDKCONFIG
+    availability:
+      - BUILD
+      - RUNTIME

@@ -1,0 +1,10 @@
+# Overrides applied by `firebase emulators:start` for App Hosting local runs.
+# The real Anthropic key comes from .env.local (gitignored); nothing secret
+# belongs in this file.
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: claudebook-lm.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: claudebook-lm
+  - variable: ALLOWED_EMAILS
+    value: marvin.wehner@gmx.de

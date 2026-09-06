@@ -1,0 +1,25 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/* Streamdown ships pre-built JS with Tailwind classes baked in; Tailwind has to
+   scan it or none of those utilities get generated. */
+@source "../../node_modules/streamdown/dist/*.js";
+
+/* Streamdown is written against shadcn's token names. HeroUI v3 already defines
+   --color-background, --color-foreground, --color-border and --color-muted, so
+   only the three it lacks need declaring. Non-inline @theme on purpose: the
+   utilities then emit var(--color-*), which the scoped override below can
+   redefine. */
+@theme {
+  --color-muted-foreground: var(--muted);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-foreground);
+}
+
+/* shadcn's `muted` is a low-contrast *surface*; HeroUI's --muted is a mid-grey
+   *text* colour. Streamdown wants the former (bg-muted on code blocks and
+   tables), HeroUI components want the latter — so remap it only inside the
+   markdown container. Apply this class to <Streamdown className=…>. */
+.claudebook-markdown {
+  --color-muted: var(--surface-secondary);
+}
