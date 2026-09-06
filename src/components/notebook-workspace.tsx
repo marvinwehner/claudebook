@@ -24,10 +24,12 @@ export function NotebookWorkspace({
   notebook,
   initialSources,
   initialEvents,
+  initialCursor,
 }: {
   notebook: Notebook;
   initialSources: Source[];
   initialEvents: UiEvent[];
+  initialCursor: string | null;
 }) {
   const [sources, setSources] = useState(initialSources);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
@@ -46,7 +48,7 @@ export function NotebookWorkspace({
 
   // Artifacts are listed live rather than mirrored, so the only way to notice a
   // new one is to re-list when the agent stops working.
-  const stream = useNotebookStream(notebook.id, initialEvents, refreshArtifacts);
+  const stream = useNotebookStream(notebook.id, initialEvents, refreshArtifacts, initialCursor);
 
   useEffect(refreshArtifacts, [refreshArtifacts]);
 

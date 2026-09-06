@@ -21,6 +21,8 @@ env:
   # browser bundle.
   - variable: ANTHROPIC_API_KEY
     secret: anthropic-api-key
+    availability:
+      - RUNTIME
 
   - variable: ANTHROPIC_AGENT_ID
     value: agent_01Jo4zPsLgxJMskAJjxNrfD5

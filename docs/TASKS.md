@@ -301,6 +301,36 @@ is the only credential-shaped value ever committed.
   real file format when asked for. Changed deliberately, at the user's request, not routed
   around.
 
+## Review pass — fixes landed, and what they contradict
+
+A full code review + security audit ran over the whole repo. Eighteen findings were fixed.
+Three of them contradict things recorded here or in PLAN.md:
+
+- **`403 + deleteUser` on refusal is no longer the behaviour.** PLAN.md:294 and lines 64 and 73
+  above still describe it. The `deleteUser` call is gone: the 403 is the control, the DAL
+  re-checks the allowlist on every request, and deleting the uid orphaned the notebooks,
+  sources and Anthropic files keyed to it — so a typo in `ALLOWED_EMAILS` destroyed real data.
+  `serverEnv()` now also rejects an allowlist empty on both sides, so that misconfiguration
+  fails loudly instead of one refused sign-in at a time.
+- **"A notebook with custom instructions loses the outputs-dir rule" is fixed.** `createSession`
+  now sends `AGENT_SYSTEM_PROMPT` with the owner's instructions appended and framed as
+  subordinate, rather than replacing the prompt outright.
+- **`ANTHROPIC_API_KEY` was reaching the build environment.** Omitting `availability` in
+  `apphosting.yaml` defaults to BUILD _and_ RUNTIME; only that one entry omitted it, while the
+  comment above it claimed runtime-only. Now explicit. Verified safe: `next build` succeeds with
+  every server secret blank, because `env.ts` validates lazily.
+
+Also fixed: a transient Anthropic error no longer destroys a conversation (`retrieve` rethrows
+anything that is not a 404/410); the SSE relay no longer emits a cursor its own decoder rejects,
+and the first connect now resumes from the SSR cursor; `listArtifacts` paginates; uploaded
+filenames are validated before they reach `mount_path` or the seed note; concurrent
+`liveSession()` can no longer create two paid sessions; `provision.ts` reconciles environment
+drift instead of only creating.
+
+Still open and deliberately not changed: the sandbox's `networking: unrestricted` combined with
+bash and web_fetch over untrusted sources is an exfiltration path. That is a settled PLAN.md
+decision, so it needs a call rather than a quiet edit.
+
 ---
 
 ## Deferred (explicitly out of scope for v1)

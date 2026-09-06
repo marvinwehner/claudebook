@@ -8,13 +8,19 @@ import { z } from "zod";
  * `next build` runs. Validating at module scope would fail every build.
  */
 
-const serverSchema = z.object({
-  ANTHROPIC_API_KEY: z.string().min(1),
-  ANTHROPIC_AGENT_ID: z.string().min(1),
-  ANTHROPIC_ENVIRONMENT_ID: z.string().min(1),
-  ALLOWED_EMAILS: z.string().default(""),
-  ALLOWED_DOMAINS: z.string().default(""),
-});
+const serverSchema = z
+  .object({
+    ANTHROPIC_API_KEY: z.string().min(1),
+    ANTHROPIC_AGENT_ID: z.string().min(1),
+    ANTHROPIC_ENVIRONMENT_ID: z.string().min(1),
+    ALLOWED_EMAILS: z.string().default(""),
+    ALLOWED_DOMAINS: z.string().default(""),
+  })
+  // An allowlist empty on both sides locks every user out. Fail loudly on the
+  // first request rather than refusing legitimate sign-ins one at a time.
+  .refine((env) => env.ALLOWED_EMAILS.trim() !== "" || env.ALLOWED_DOMAINS.trim() !== "", {
+    message: "at least one of ALLOWED_EMAILS or ALLOWED_DOMAINS must be non-empty",
+  });
 
 const publicSchema = z.object({
   NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1),
@@ -30,7 +36,10 @@ let serverCache: ServerEnv | undefined;
 let publicCache: PublicEnv | undefined;
 
 function fail(scope: string, error: z.ZodError): never {
-  const missing = error.issues.map((i) => i.path.join(".")).join(", ");
+  // Object-level refinements carry no path, so fall back to their message.
+  const missing = error.issues
+    .map((i) => (i.path.length ? i.path.join(".") : i.message))
+    .join(", ");
   throw new Error(
     `Invalid ${scope} environment: ${missing}. ` +
       `Set these in .env.local for local dev, or in apphosting.yaml for deploys.`,

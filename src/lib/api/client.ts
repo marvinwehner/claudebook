@@ -1,4 +1,3 @@
-import type { UiEvent } from "@/lib/anthropic/events";
 import type { Artifact } from "@/lib/anthropic/files";
 import type { Notebook } from "@/lib/firestore/notebooks";
 import type { Source } from "@/lib/firestore/sources";
@@ -73,10 +72,6 @@ export const api = {
     return request<{ ok: true }>(`/api/notebooks/${id}/interrupt`, {
       method: "POST",
     });
-  },
-
-  transcript(id: string) {
-    return request<{ events: UiEvent[]; cursor: string | null }>(`/api/notebooks/${id}/events`);
   },
 
   listSources(id: string) {

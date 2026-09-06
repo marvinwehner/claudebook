@@ -11,8 +11,8 @@ export interface ToolActivity {
 
 export interface StreamState {
   events: UiEvent[];
-  /** Live preview text, keyed by the id of the message being generated. */
-  previews: Map<string, string>;
+  /** Live preview parts by delta index, keyed by the id of the message being generated. */
+  previews: Map<string, string[]>;
   isRunning: boolean;
   isThinking: boolean;
   activeTools: ToolActivity[];
@@ -32,9 +32,10 @@ export function useNotebookStream(
   notebookId: string,
   initialEvents: UiEvent[],
   onTurnComplete?: () => void,
+  initialCursor?: string | null,
 ): StreamState {
   const [events, setEvents] = useState<UiEvent[]>(initialEvents);
-  const [previews, setPreviews] = useState<Map<string, string>>(new Map());
+  const [previews, setPreviews] = useState<Map<string, string[]>>(new Map());
   const [isRunning, setRunning] = useState(false);
   const [isThinking, setThinking] = useState(false);
   const [activeTools, setActiveTools] = useState<ToolActivity[]>([]);
@@ -49,10 +50,13 @@ export function useNotebookStream(
       switch (event.kind) {
         case "delta":
           // Best-effort: deltas can be shed under load, so this is only ever a
-          // prefix of what the buffered message will say.
+          // prefix of what the buffered message will say. Stored by index so a
+          // resume that replays deltas overwrites rather than concatenates.
           setPreviews((current) => {
+            const parts = [...(current.get(event.id) ?? [])];
+            parts[event.index] = event.text;
             const next = new Map(current);
-            next.set(event.id, (next.get(event.id) ?? "") + event.text);
+            next.set(event.id, parts);
             return next;
           });
           setThinking(false);
@@ -91,6 +95,11 @@ export function useNotebookStream(
 
         case "status":
           setRunning(event.status === "running");
+          // A turn that ends without a buffered message — interrupted, errored,
+          // terminated — would otherwise leave its preview stranded.
+          if (event.status === "idle" || event.status === "terminated") {
+            setPreviews((current) => (current.size === 0 ? current : new Map()));
+          }
           if (event.status === "idle") {
             setThinking(false);
             setActiveTools([]);
@@ -113,7 +122,10 @@ export function useNotebookStream(
   );
 
   useEffect(() => {
-    const source = new EventSource(`/api/notebooks/${notebookId}/stream`);
+    // Last-Event-ID is sent only on a reconnect, so the first connect carries
+    // the SSR snapshot's cursor in the query or the events since it are lost.
+    const query = initialCursor ? `?cursor=${encodeURIComponent(initialCursor)}` : "";
+    const source = new EventSource(`/api/notebooks/${notebookId}/stream${query}`);
 
     source.onopen = () => setConnected(true);
     source.onerror = () => {
@@ -136,7 +148,9 @@ export function useNotebookStream(
     }
 
     return () => source.close();
-  }, [notebookId, handle]);
+    // initialCursor is a string from the server render, so it is stable by
+    // value and does not tear the subscription down on every render.
+  }, [notebookId, initialCursor, handle]);
 
   return { events, previews, isRunning, isThinking, activeTools, connected };
 }

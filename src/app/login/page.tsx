@@ -52,8 +52,10 @@ export default function LoginPage() {
         const body = (await response.json().catch(() => ({}))) as {
           error?: string;
         };
-        // The server refused and deleted the account it just saw. Drop the
-        // client-side session too, or the UI claims to be signed in.
+        // The server refused to mint a cookie. Drop the client-side session
+        // too, or the UI claims to be signed in. A 401 here means the sign-in
+        // went stale, and pressing the button again is the fix — a token
+        // refresh would not help, because it preserves the original auth_time.
         await signOut(auth).catch(() => {});
         setError(body.error ?? "Sign-in was refused.");
         return;

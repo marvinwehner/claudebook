@@ -7,8 +7,8 @@
  * the endpaper is always the accent.
  *
  * `docs/logo.svg` and `docs/logo-dark.svg` are this same geometry with the
- * colours baked in, for the README — GitHub has no CSS to inherit. Change them
- * together.
+ * colours baked in, for the README — GitHub has no CSS to inherit — as is
+ * `src/app/icon.svg`, the favicon. Change them together.
  */
 export function ClaudebookMark({ className }: { className?: string }) {
   return (

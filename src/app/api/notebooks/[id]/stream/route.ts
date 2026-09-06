@@ -4,7 +4,7 @@ import type { Stream } from "@anthropic-ai/sdk/core/streaming";
 import { anthropic } from "@/lib/anthropic/client";
 import { decodeCursor, encodeCursor, normalizeEvent, type UiEvent } from "@/lib/anthropic/events";
 import { requireUser } from "@/lib/auth/dal";
-import { toErrorResponse } from "@/lib/notebooks/errors";
+import { ConflictError, toErrorResponse } from "@/lib/notebooks/errors";
 import { liveSession, requireNotebook } from "@/lib/notebooks/notebook-service";
 
 /**
@@ -22,11 +22,27 @@ import { liveSession, requireNotebook } from "@/lib/notebooks/notebook-service";
  * makes that seam lossless.
  */
 
+const SSE_HEADERS = {
+  "Content-Type": "text/event-stream; charset=utf-8",
+  // no-transform matters as much as no-store: a compressing proxy would buffer
+  // the whole response and defeat streaming entirely.
+  "Cache-Control": "no-store, no-transform",
+  Connection: "keep-alive",
+  "X-Accel-Buffering": "no",
+};
+
+const BLANK = "\n\n";
+
 const SELF_CLOSE_MS = 4 * 60 * 1000;
 const HEARTBEAT_MS = 15 * 1000;
 
-function frame(event: UiEvent, cursor: string): string {
-  return `id: ${cursor}\nevent: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`;
+/**
+ * `id:` is omitted for an event with no `processed_at`, because there is no
+ * timestamp to resume from. Per the SSE spec the browser then keeps the last id
+ * it saw, so an unresumable cursor can never displace a usable one.
+ */
+function frame(event: UiEvent, cursor: string | null): string {
+  return `${cursor ? `id: ${cursor}\n` : ""}event: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
 export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[id]/stream">) {
@@ -38,25 +54,41 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
     const notebook = await requireNotebook(id, user.uid);
     sessionId = (await liveSession(notebook)).session.id;
   } catch (error) {
+    // A conflict means another request is mid-rebuild. Closing a valid stream
+    // lets EventSource reconnect; a non-2xx would stop it for good.
+    if (error instanceof ConflictError) {
+      return new Response("retry: 2000" + BLANK, { headers: SSE_HEADERS });
+    }
     // Auth and ownership failures must be ordinary JSON responses — an
     // EventSource that gets a 401 stops retrying, which is what we want.
     return toErrorResponse(error);
   }
 
-  const cursor = decodeCursor(request.headers.get("last-event-id"));
+  // The header only exists on an automatic reconnect. The query param carries
+  // the cursor the server component already computed, so the first connect
+  // resumes from the rendered transcript instead of from nothing.
+  const cursor = decodeCursor(
+    request.headers.get("last-event-id") ?? new URL(request.url).searchParams.get("cursor"),
+  );
   const encoder = new TextEncoder();
+
+  let cancelRelay = () => {};
 
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       const seen = new Set<string>();
       let closed = false;
+      let stream: Stream<Anthropic.Beta.Sessions.BetaManagedAgentsStreamSessionEvents> | null =
+        null;
 
       const send = (text: string) => {
         if (closed) return;
         try {
           controller.enqueue(encoder.encode(text));
         } catch {
-          closed = true;
+          // The peer is gone; tear the whole relay down rather than leaving the
+          // heartbeat and the upstream stream running.
+          finish();
         }
       };
 
@@ -66,25 +98,17 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
         send(
           frame(
             event,
-            encodeCursor({
-              timestamp: raw.processed_at ?? "",
-              eventId: raw.id,
-            }),
+            raw.processed_at
+              ? encodeCursor({ timestamp: raw.processed_at, eventId: raw.id })
+              : null,
           ),
         );
       };
-
-      // We close ourselves every 4 minutes, so EventSource's 3s default retry
-      // would leave a visible gap after every one. Ask for a shorter one.
-      send("retry: 750\n\n");
 
       // Intermediaries drop connections that go quiet; a comment frame is the
       // cheapest thing that counts as traffic.
       const heartbeat = setInterval(() => send(": ping\n\n"), HEARTBEAT_MS);
       const selfClose = setTimeout(() => finish(), SELF_CLOSE_MS);
-
-      let stream: Stream<Anthropic.Beta.Sessions.BetaManagedAgentsStreamSessionEvents> | null =
-        null;
 
       function finish() {
         if (closed) return;
@@ -98,8 +122,13 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
           // Already closed by the client going away.
         }
       }
+      cancelRelay = finish;
 
-      request.signal.addEventListener("abort", finish);
+      // We close ourselves every 4 minutes, so EventSource's 3s default retry
+      // would leave a visible gap after every one. Ask for a shorter one.
+      send("retry: 750\n\n");
+
+      request.signal.addEventListener("abort", () => finish());
 
       try {
         // Open the stream BEFORE replaying history. The stream carries only
@@ -110,21 +139,19 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
         });
 
         if (cursor) {
-          // `created_at[gt]` is the filter's name; results are ordered by
-          // processed_at, which is the only timestamp an event carries. The
-          // `seen` set is what actually makes the seam exact.
-          const history = await anthropic().beta.sessions.events.list(sessionId, {
+          // `created_at[gt]` filters on, and `order` sorts by, the event's
+          // `processed_at`. The `seen` set is what makes the seam exact.
+          seen.add(cursor.eventId);
+          for await (const raw of anthropic().beta.sessions.events.list(sessionId, {
             "created_at[gt]": cursor.timestamp,
             order: "asc",
-            limit: 1000,
-          });
-          seen.add(cursor.eventId);
-          for (const raw of history.data) {
+          })) {
+            if (closed) break;
             emit(raw, normalizeEvent(raw));
           }
         }
 
-        for await (const raw of stream!) {
+        for await (const raw of stream) {
           if (closed) break;
 
           // event_start / event_delta are preview-only: never persisted, no id
@@ -154,16 +181,13 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
         finish();
       }
     },
-  });
 
-  return new Response(body, {
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      // no-transform matters as much as no-store: a compressing proxy would
-      // buffer the whole response and defeat streaming entirely.
-      "Cache-Control": "no-store, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+    // Fired when the response body is discarded without `request.signal`
+    // aborting — a proxy teardown, or the tab going away at the wrong moment.
+    cancel() {
+      cancelRelay();
     },
   });
+
+  return new Response(body, { headers: SSE_HEADERS });
 }

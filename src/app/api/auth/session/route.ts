@@ -9,6 +9,13 @@ import { adminAuth } from "@/lib/firebase/admin";
 const bodySchema = z.object({ idToken: z.string().min(1) });
 
 /**
+ * An ID token stays valid for an hour and is persisted client-side, while the
+ * cookie it mints lasts five days. `createSessionCookie` does not check
+ * recency, so we do.
+ */
+const MAX_AUTH_AGE_SECONDS = 5 * 60;
+
+/**
  * Same-origin check. The session cookie is SameSite=Lax, which already blocks
  * cross-site POSTs, but this endpoint mints the cookie so it gets a second
  * lock: a request with no Origin, or an Origin whose host disagrees with the
@@ -55,6 +62,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid or expired sign-in token." }, { status: 401 });
   }
 
+  if (Date.now() / 1000 - claims.auth_time > MAX_AUTH_AGE_SECONDS) {
+    return NextResponse.json(
+      { error: "This sign-in is too old. Please sign in again." },
+      { status: 401 },
+    );
+  }
+
   // Google is the only configured provider; anything else means someone found
   // another way into the Identity Platform tenant.
   const provider = claims.firebase?.sign_in_provider;
@@ -62,19 +76,10 @@ export async function POST(request: Request) {
     provider === "google.com" && claims.email_verified === true && isAllowedEmail(claims.email);
 
   if (!acceptable) {
-    // Leave no account behind. A refused sign-in still created a Firebase user
-    // record — delete it so the tenant only ever holds allowlisted people.
-    //
-    // Consequence worth knowing: removing an address from ALLOWED_EMAILS and
-    // having that person sign in again deletes their uid, which orphans any
-    // notebooks keyed to it. For an invite-only app that is the intended
-    // meaning of "revoked".
-    await adminAuth()
-      .deleteUser(claims.uid)
-      .catch(() => {
-        /* best effort — the refusal matters more than the cleanup */
-      });
-
+    // The refused account is left in place deliberately. Refusing to mint a
+    // cookie is the control — the DAL re-checks the allowlist on every request,
+    // so an account that is not on it can do nothing — and deleting the uid
+    // would orphan the notebooks, sources and Anthropic files keyed to it.
     return NextResponse.json(
       { error: "This Google account is not on the Claudebook allowlist." },
       { status: 403 },

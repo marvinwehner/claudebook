@@ -29,18 +29,23 @@ export interface UploadedSource {
   sizeBytes: number;
 }
 
-export async function uploadSource(file: File): Promise<UploadedSource> {
+/**
+ * `filename` is the caller's already-validated name, not `file.name` — it is
+ * echoed back rather than `uploaded.filename` so that the dedupe check, the
+ * mount path and the Firestore row all agree even if Anthropic normalises it.
+ */
+export async function uploadSource(file: File, filename: string): Promise<UploadedSource> {
   // The Files API is out of beta and takes no `purpose` — docs that mention
   // purpose: "agent" predate that.
   const uploaded = await anthropic().files.upload({
-    file: await toFile(file, file.name, {
+    file: await toFile(file, filename, {
       type: file.type || "application/octet-stream",
     }),
   });
 
   return {
     anthropicFileId: uploaded.id,
-    filename: uploaded.filename,
+    filename,
     mimeType: uploaded.mime_type,
     sizeBytes: uploaded.size_bytes,
   };
@@ -97,23 +102,28 @@ export interface Artifact {
  * - It is not immediate. Indexing lags `session.status_idle` by a second or
  *   two, so we retry — on the *filtered* count, because the mounted sources
  *   are already there and would otherwise satisfy the retry straight away.
+ *
+ * It is also paginated, and awaiting the list call yields only the first page.
+ * A notebook with enough sources to fill one would have every artifact filtered
+ * away, so iterate the PagePromise instead — that auto-paginates.
  */
 export async function listArtifacts(sessionId: string, retries = 2): Promise<Artifact[]> {
   for (let attempt = 0; ; attempt++) {
-    const page = await anthropic().beta.files.list({
+    const artifacts: Artifact[] = [];
+
+    for await (const file of anthropic().beta.files.list({
       scope_id: sessionId,
       betas: [MANAGED_AGENTS_BETA],
-    });
-
-    const artifacts = page.data
-      .filter((file) => file.downloadable === true)
-      .map((file) => ({
+    })) {
+      if (file.downloadable !== true) continue;
+      artifacts.push({
         fileId: file.id,
         filename: file.filename,
         sizeBytes: file.size_bytes,
         mimeType: file.mime_type,
         createdAt: file.created_at,
-      }));
+      });
+    }
 
     if (artifacts.length > 0 || attempt >= retries) return artifacts;
     await new Promise((resolve) => setTimeout(resolve, 1500));

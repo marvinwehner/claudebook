@@ -1,5 +1,7 @@
 import "server-only";
 
+import { NotFoundError } from "@anthropic-ai/sdk";
+
 import { anthropic } from "@/lib/anthropic/client";
 import { encodeCursor, normalizeEvent, type UiEvent } from "@/lib/anthropic/events";
 import type { Notebook } from "@/lib/notebooks/notebook-service";
@@ -9,6 +11,9 @@ export interface Transcript {
   /** Where a stream should resume from. Null when there is nothing yet. */
   cursor: string | null;
 }
+
+/** How many rendered events the first paint carries. */
+const MAX_EVENTS = 500;
 
 /**
  * The conversation so far.
@@ -23,24 +28,32 @@ export interface Transcript {
 export async function loadTranscript(notebook: Notebook): Promise<Transcript> {
   if (!notebook.sessionId) return { events: [], cursor: null };
 
-  const page = await anthropic().beta.sessions.events.list(notebook.sessionId, {
-    order: "asc",
-    limit: 1000,
-  });
-
   const events: UiEvent[] = [];
   let cursor: string | null = null;
 
-  for (const raw of page.data) {
-    const event = normalizeEvent(raw);
-    if (event) events.push(event);
+  try {
+    // Newest first, so a long conversation keeps its most recent turns instead
+    // of its first ones.
+    for await (const raw of anthropic().beta.sessions.events.list(notebook.sessionId, {
+      order: "desc",
+    })) {
+      // The cursor tracks every event, not just rendered ones, so a resume does
+      // not re-deliver the ones we chose to drop.
+      if (!cursor && raw.processed_at) {
+        cursor = encodeCursor({ timestamp: raw.processed_at, eventId: raw.id });
+      }
 
-    // The cursor tracks every event, not just rendered ones, so a resume does
-    // not re-deliver the ones we chose to drop.
-    if (raw.processed_at) {
-      cursor = encodeCursor({ timestamp: raw.processed_at, eventId: raw.id });
+      const event = normalizeEvent(raw);
+      if (event) events.push(event);
+      if (events.length >= MAX_EVENTS) break;
     }
+  } catch (error) {
+    // The session expired out from under us; the next stream connect rehydrates
+    // it. Anything else is a real failure and belongs to the error boundary.
+    if (!(error instanceof NotFoundError)) throw error;
+    return { events: [], cursor: null };
   }
 
+  events.reverse();
   return { events, cursor };
 }

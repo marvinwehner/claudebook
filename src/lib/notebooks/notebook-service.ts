@@ -8,7 +8,7 @@ import { archiveSession, ensureSession, type SessionSpec } from "@/lib/anthropic
 import * as notebooks from "@/lib/firestore/notebooks";
 import * as sources from "@/lib/firestore/sources";
 import { DEFAULT_NOTEBOOK_ICON } from "@/lib/notebook-icons";
-import { NotFoundError, ValidationError } from "@/lib/notebooks/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/notebooks/errors";
 
 export type Notebook = notebooks.Notebook;
 
@@ -97,25 +97,42 @@ export interface LiveSession {
  * gateway stays free of Firestore.
  */
 export async function liveSession(notebook: Notebook): Promise<LiveSession> {
-  const notebookSources = await sources.listSources(notebook.id);
-  const result = await ensureSession(notebook.sessionId, specFor(notebook, notebookSources));
+  let current = notebook;
 
-  if (!result.rehydrated) {
-    return { session: result.session, seedNote: notebook.pendingSeedNote };
+  // Bounded: each failed claim means somebody else's session is now the
+  // notebook's, so the next pass retrieves theirs and creates nothing. More
+  // than one round is already pathological.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const notebookSources = await sources.listSources(current.id);
+    const result = await ensureSession(current.sessionId, specFor(current, notebookSources));
+
+    if (!result.rehydrated) {
+      return { session: result.session, seedNote: current.pendingSeedNote };
+    }
+
+    const claimed = await notebooks.claimSessionId(current.id, current.sessionId ?? null, {
+      sessionId: result.session.id,
+      sessionStatus: result.session.status,
+      agentVersion: result.session.agent?.version ?? null,
+      ...(result.seedNote ? { pendingSeedNote: result.seedNote } : {}),
+    });
+
+    if (claimed) {
+      if (result.resourceIds) {
+        await sources.setSessionResourceIds(current.id, result.resourceIds);
+      }
+      return { session: result.session, seedNote: result.seedNote };
+    }
+
+    // Ours is now unreferenced and would hold its budget forever.
+    await archiveSession(result.session.id).catch(() => {});
+
+    const refreshed = await notebooks.getNotebook(current.id, current.ownerId);
+    if (!refreshed) throw new NotFoundError("Notebook not found.");
+    current = refreshed;
   }
 
-  await notebooks.updateNotebook(notebook.id, {
-    sessionId: result.session.id,
-    sessionStatus: result.session.status,
-    agentVersion: result.session.agent?.version ?? null,
-    pendingSeedNote: result.seedNote,
-  });
-
-  if (result.resourceIds) {
-    await sources.setSessionResourceIds(notebook.id, result.resourceIds);
-  }
-
-  return { session: result.session, seedNote: result.seedNote };
+  throw new ConflictError("This notebook's session is being rebuilt. Try again.");
 }
 
 /** Called once the seed note has actually been sent. */

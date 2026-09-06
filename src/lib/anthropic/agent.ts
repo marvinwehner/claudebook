@@ -98,6 +98,9 @@ export const AGENT_SKILLS = [
   { type: "anthropic" as const, skill_id: "pdf" },
 ];
 
+// KNOWN VULNERABILITY, accepted for now: unrestricted egress plus the toolset's
+// bash and web_fetch lets a prompt-injected source exfiltrate the notebook's
+// other sources. Closing it means `type: "limited"` plus per-tool domain lists.
 export const ENVIRONMENT_CONFIG = {
   type: "cloud" as const,
   networking: { type: "unrestricted" as const },

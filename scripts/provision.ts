@@ -42,19 +42,52 @@ async function findByName<T extends { name?: string | null; archived_at?: string
   return undefined;
 }
 
+/**
+ * Deep "everything the committed config sets, the live object already has".
+ * Same story as the agent's tools: the API fills in defaults the config omits —
+ * `packages`, and every optional field of `limited` networking — so comparing
+ * the whole object would never match.
+ */
+function subsetMatches(live: unknown, committed: unknown): boolean {
+  if (Array.isArray(committed)) {
+    return (
+      Array.isArray(live) &&
+      live.length === committed.length &&
+      committed.every((value, index) => subsetMatches(live[index], value))
+    );
+  }
+  if (committed === null || typeof committed !== "object") return live === committed;
+  if (live === null || typeof live !== "object") return false;
+
+  return Object.entries(committed).every(([key, value]) =>
+    subsetMatches((live as Record<string, unknown>)[key], value),
+  );
+}
+
 async function ensureEnvironment() {
   const existing = await findByName(client.beta.environments.list(), ENVIRONMENT_NAME);
-  if (existing) {
+
+  if (!existing) {
+    const created = await client.beta.environments.create({
+      name: ENVIRONMENT_NAME,
+      config: ENVIRONMENT_CONFIG,
+    });
+    console.log(`environment  created  ${created.id}  (${ENVIRONMENT_NAME})`);
+    return created;
+  }
+
+  if (subsetMatches(existing.config, ENVIRONMENT_CONFIG)) {
     console.log(`environment  ok       ${existing.id}  (${ENVIRONMENT_NAME})`);
     return existing;
   }
 
-  const created = await client.beta.environments.create({
-    name: ENVIRONMENT_NAME,
+  // Update in place. Omitted fields preserve their existing value, so sending
+  // the committed config only moves what this repo actually controls.
+  const updated = await client.beta.environments.update(existing.id, {
     config: ENVIRONMENT_CONFIG,
   });
-  console.log(`environment  created  ${created.id}  (${ENVIRONMENT_NAME})`);
-  return created;
+  console.log(`environment  updated  ${updated.id}  (${ENVIRONMENT_NAME})`);
+  return updated;
 }
 
 /**

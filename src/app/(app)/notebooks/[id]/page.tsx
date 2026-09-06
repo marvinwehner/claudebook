@@ -40,6 +40,7 @@ export default async function NotebookPage({ params }: PageProps<"/notebooks/[id
         notebook={notebook}
         initialSources={sources}
         initialEvents={transcript.events}
+        initialCursor={transcript.cursor}
       />
     </div>
   );

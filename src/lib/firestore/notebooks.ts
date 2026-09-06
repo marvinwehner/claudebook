@@ -153,6 +153,46 @@ export async function updateNotebook(id: string, patch: NotebookPatch): Promise<
   await collection().doc(id).update(update);
 }
 
+export interface SessionClaim {
+  sessionId: string;
+  sessionStatus: string | null;
+  agentVersion: number | null;
+  pendingSeedNote?: string;
+}
+
+/**
+ * Takes the session fields only if `sessionId` is still `expected`. False means
+ * another request got there first, and the caller's session is now unreferenced.
+ *
+ * A plain read-modify-write loses that race, and losing it costs real money:
+ * both writers create a container with its own budget, only one id lands, and
+ * `GET /v1/sessions` has no metadata filter, so the other can never be found.
+ */
+export async function claimSessionId(
+  id: string,
+  expected: string | null,
+  claim: SessionClaim,
+): Promise<boolean> {
+  const ref = collection().doc(id);
+
+  return adminDb().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) return false;
+    if ((snapshot.get("sessionId") ?? null) !== expected) return false;
+
+    const update: Record<string, unknown> = {
+      sessionId: claim.sessionId,
+      sessionStatus: claim.sessionStatus,
+      agentVersion: claim.agentVersion,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (claim.pendingSeedNote) update.pendingSeedNote = claim.pendingSeedNote;
+
+    transaction.update(ref, update);
+    return true;
+  });
+}
+
 export async function deleteNotebook(id: string): Promise<void> {
   // Deletes the document and its `sources` subcollection.
   await adminDb().recursiveDelete(collection().doc(id));

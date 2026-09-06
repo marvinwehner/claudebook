@@ -27,6 +27,8 @@ function Markdown({ text, isStreaming }: { text: string; isStreaming?: boolean }
   return (
     // claudebook-markdown repaints the parts of streamdown's chrome whose
     // shadcn token names land wrong on HeroUI. See globals.css.
+    // KNOWN VULNERABILITY, accepted for now: Streamdown allows every image host
+    // by default, so an injected source can exfiltrate through an image URL.
     <Streamdown className="claudebook-markdown" isAnimating={isStreaming}>
       {text}
     </Streamdown>
@@ -83,7 +85,7 @@ export function ChatPane({
   const [error, setError] = useState<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
-  const previewText = [...stream.previews.values()].join("");
+  const previewText = [...stream.previews.values()].map((parts) => parts.join("")).join("");
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -91,7 +93,9 @@ export function ChatPane({
 
   async function send() {
     const text = draft.trim();
-    if (!text) return;
+    // `sending` guards the auto-repeat of a held Enter: the draft is only
+    // cleared after the await, so every repeat would post it again.
+    if (!text || sending) return;
 
     setSending(true);
     setError(null);
@@ -157,7 +161,13 @@ export function ChatPane({
           {/* `secondary` because a field's default background is --surface, which
               is exactly what this bar is painted with — the box vanishes into it.
               No `fullWidth` needed: the column stretches the textarea already. */}
-          <TextField variant="secondary" value={draft} onChange={setDraft} aria-label="Message">
+          <TextField
+            variant="secondary"
+            value={draft}
+            onChange={setDraft}
+            isDisabled={sending}
+            aria-label="Message"
+          >
             <TextArea
               rows={2}
               placeholder="Ask about your sources…"

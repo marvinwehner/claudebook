@@ -80,70 +80,83 @@ async function main() {
     "notebook appears in its owner's list",
     (await listNotebooks(OWNER)).some((candidate) => candidate.id === notebook.id),
   );
+  // Tracks the newest known state so the cleanup below works from any point.
+  let latest = notebook;
 
-  console.log("\n2. ownership boundary");
-  check("another user's list does not include it", (await listNotebooks(INTRUDER)).length === 0);
-  let intruderSaw404 = false;
   try {
-    await requireNotebook(notebook.id, INTRUDER);
-  } catch (error) {
-    intruderSaw404 = error instanceof NotFoundError;
-  }
-  check("another user gets NotFound on a real id, not Forbidden", intruderSaw404);
-
-  console.log("\n3. upload a source");
-  const source = await addSource(notebook, new File([SOURCE], FILENAME, { type: "text/markdown" }));
-  check("source indexed and mounted", Boolean(source.sessionResourceId), source.mountPath);
-  check("source listed", (await listSources(notebook)).length === 1);
-
-  let duplicateRejected = false;
-  try {
-    await addSource(notebook, new File([SOURCE], FILENAME, { type: "text/markdown" }));
-  } catch {
-    duplicateRejected = true;
-  }
-  check("a second source with the same filename is rejected", duplicateRejected);
-
-  console.log("\n4. ask a grounded question");
-  const answer = await ask(notebook.sessionId!, "How many orbits did the probe complete?");
-  console.log(`   ${answer.slice(0, 200).replace(/\n/g, " ")}`);
-  check("answer contains 1,947", /1[,.]?947/.test(answer));
-  check(`answer cites [${FILENAME}]`, answer.includes(FILENAME));
-
-  console.log("\n5. ask for an artifact");
-  await ask(notebook.sessionId!, "Write a short briefing document about this log.");
-  const artifacts = await listNotebookArtifacts(notebook);
-  check("an artifact was written and listed", artifacts.length > 0, `${artifacts.length}`);
-
-  if (artifacts[0]) {
-    const download = await downloadNotebookArtifact(notebook, artifacts[0].fileId);
-    const body = download.body ? await new Response(download.body).text() : "";
-    check("artifact downloads with content", body.length > 0, `${body.length} bytes`);
-
-    let crossUserBlocked = false;
+    console.log("\n2. ownership boundary");
+    check("another user's list does not include it", (await listNotebooks(INTRUDER)).length === 0);
+    let intruderSaw404 = false;
     try {
-      // The intruder's own (nonexistent) notebook cannot resolve this file id.
-      await downloadNotebookArtifact(
-        { ...notebook, id: "nope", sessionId: null },
-        artifacts[0].fileId,
-      );
+      await requireNotebook(notebook.id, INTRUDER);
     } catch (error) {
-      crossUserBlocked = error instanceof NotFoundError;
+      intruderSaw404 = error instanceof NotFoundError;
     }
-    check("an artifact id from another notebook is refused", crossUserBlocked);
+    check("another user gets NotFound on a real id, not Forbidden", intruderSaw404);
+
+    console.log("\n3. upload a source");
+    const source = await addSource(
+      notebook,
+      new File([SOURCE], FILENAME, { type: "text/markdown" }),
+    );
+    check("source indexed and mounted", Boolean(source.sessionResourceId), source.mountPath);
+    check("source listed", (await listSources(notebook)).length === 1);
+
+    let duplicateRejected = false;
+    try {
+      await addSource(notebook, new File([SOURCE], FILENAME, { type: "text/markdown" }));
+    } catch {
+      duplicateRejected = true;
+    }
+    check("a second source with the same filename is rejected", duplicateRejected);
+
+    console.log("\n4. ask a grounded question");
+    const answer = await ask(notebook.sessionId!, "How many orbits did the probe complete?");
+    console.log(`   ${answer.slice(0, 200).replace(/\n/g, " ")}`);
+    check("answer contains 1,947", /1[,.]?947/.test(answer));
+    check(`answer cites [${FILENAME}]`, answer.includes(FILENAME));
+
+    console.log("\n5. ask for an artifact");
+    await ask(notebook.sessionId!, "Write a short briefing document about this log.");
+    const artifacts = await listNotebookArtifacts(notebook);
+    check("an artifact was written and listed", artifacts.length > 0, `${artifacts.length}`);
+
+    if (artifacts[0]) {
+      const download = await downloadNotebookArtifact(notebook, artifacts[0].fileId);
+      const body = download.body ? await new Response(download.body).text() : "";
+      check("artifact downloads with content", body.length > 0, `${body.length} bytes`);
+
+      let crossUserBlocked = false;
+      try {
+        // The intruder's own (nonexistent) notebook cannot resolve this file id.
+        await downloadNotebookArtifact(
+          { ...notebook, id: "nope", sessionId: null },
+          artifacts[0].fileId,
+        );
+      } catch (error) {
+        crossUserBlocked = error instanceof NotFoundError;
+      }
+      check("an artifact id from another notebook is refused", crossUserBlocked);
+    }
+
+    console.log("\n6. remove the source");
+    await removeSource(notebook, source.id);
+    check("source removed from the index", (await listSources(notebook)).length === 0);
+
+    console.log("\n7. change the model");
+    const updated = await updateNotebook(notebook, { model: "claude-opus-5" });
+    latest = updated.notebook;
+    check("model change resets the conversation", updated.conversationReset);
+    check("model change clears the session id", updated.notebook.sessionId === null);
+  } finally {
+    // In a finally so a failure part-way through cannot leave a paid session,
+    // an uploaded file and a Firestore document behind.
+    console.log("\n8. delete");
+    await deleteNotebook(latest).catch((error: unknown) => {
+      console.error(`  CLEANUP FAILED - orphaned notebook ${latest.id}:`, error);
+    });
   }
 
-  console.log("\n6. remove the source");
-  await removeSource(notebook, source.id);
-  check("source removed from the index", (await listSources(notebook)).length === 0);
-
-  console.log("\n7. change the model");
-  const updated = await updateNotebook(notebook, { model: "claude-opus-5" });
-  check("model change resets the conversation", updated.conversationReset);
-  check("model change clears the session id", updated.notebook.sessionId === null);
-
-  console.log("\n8. delete");
-  await deleteNotebook(updated.notebook);
   check(
     "notebook is gone",
     (await listNotebooks(OWNER)).every((candidate) => candidate.id !== notebook.id),

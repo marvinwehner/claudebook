@@ -50,10 +50,15 @@ export function ArtifactsRail({
   const [previewing, setPreviewing] = useState(false);
 
   async function open(artifact: Artifact) {
+    // Otherwise the heading names the previous artifact while this one loads.
+    setPreview(null);
     setPreviewing(true);
     state.open();
     try {
       const response = await fetch(api.artifactUrl(notebookId, artifact.fileId));
+      // fetch does not reject on 4xx, so without this the error JSON would be
+      // rendered as the artifact.
+      if (!response.ok) throw new Error(`Artifact request failed (${response.status}).`);
       setPreview({ artifact, body: await response.text() });
     } catch {
       setPreview({ artifact, body: "_Could not load this artifact._" });

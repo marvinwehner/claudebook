@@ -11,6 +11,35 @@ export type Source = sources.Source;
 /** Anthropic caps a session at 500 file resources. */
 const MAX_SOURCES = 500;
 const MAX_BYTES = 32 * 1024 * 1024;
+const MAX_FILENAME_CHARS = 200;
+
+/**
+ * `file.name` is the multipart `filename=` parameter, so it is entirely
+ * attacker-controlled, and it leaves this app twice: as a `mount_path`, where
+ * `../outputs/x` would escape into the artifact directory, and interpolated
+ * into the rehydration note, which is sent with system authority.
+ *
+ * Rejected rather than rewritten: a silently rewritten name would slip past the
+ * duplicate check two lines below and let two sources collide on one mount path.
+ */
+function validFilename(raw: string): string {
+  const name = raw.split(/[/\\]/).pop() ?? "";
+
+  const usable =
+    name === raw &&
+    name.length > 0 &&
+    name.length <= MAX_FILENAME_CHARS &&
+    !name.startsWith(".") &&
+    !/[\u0000-\u001f\u007f]/.test(name);
+
+  if (!usable) {
+    throw new ValidationError(
+      `"${raw}" is not a usable filename. Use a plain name with no slashes or ` +
+        `leading dot, at most ${MAX_FILENAME_CHARS} characters.`,
+    );
+  }
+  return name;
+}
 
 export async function listSources(notebook: Notebook): Promise<Source[]> {
   return sources.listSources(notebook.id);
@@ -25,27 +54,31 @@ export async function listSources(notebook: Notebook): Promise<Source[]> {
  * conversation.
  */
 export async function addSource(notebook: Notebook, file: File): Promise<Source> {
-  if (file.size === 0) throw new ValidationError(`${file.name} is empty.`);
+  // The one validated name, used for the dedupe check, the mount path and the
+  // index row alike — anything else lets those three drift apart.
+  const filename = validFilename(file.name);
+
+  if (file.size === 0) throw new ValidationError(`${filename} is empty.`);
   if (file.size > MAX_BYTES) {
-    throw new ValidationError(`${file.name} is larger than the 32 MB limit.`);
+    throw new ValidationError(`${filename} is larger than the 32 MB limit.`);
   }
 
   const existing = await sources.listSources(notebook.id);
   if (existing.length >= MAX_SOURCES) {
     throw new ValidationError(`A notebook holds at most ${MAX_SOURCES} sources.`);
   }
-  if (existing.some((source) => source.filename === file.name)) {
+  if (existing.some((source) => source.filename === filename)) {
     // Filenames are how the agent cites, and how mount paths are built. Two
     // sources with one name would make both ambiguous.
-    throw new ValidationError(`This notebook already has a source called ${file.name}.`);
+    throw new ValidationError(`This notebook already has a source called ${filename}.`);
   }
 
-  const uploaded = await uploadSource(file);
+  const uploaded = await uploadSource(file, filename);
   const { session } = await liveSession(notebook);
 
   let sessionResourceId: string | null = null;
   try {
-    sessionResourceId = await mountSource(session.id, uploaded.anthropicFileId, uploaded.filename);
+    sessionResourceId = await mountSource(session.id, uploaded.anthropicFileId, filename);
   } catch (error) {
     // Don't leave an unreferenced file behind in the workspace.
     await deleteFile(uploaded.anthropicFileId).catch(() => {});
@@ -53,10 +86,10 @@ export async function addSource(notebook: Notebook, file: File): Promise<Source>
   }
 
   return sources.createSource(notebook.id, {
-    filename: uploaded.filename,
+    filename,
     mimeType: uploaded.mimeType,
     sizeBytes: uploaded.sizeBytes,
-    mountPath: mountPathFor(uploaded.filename),
+    mountPath: mountPathFor(filename),
     anthropicFileId: uploaded.anthropicFileId,
     sessionResourceId,
     status: "ready",
