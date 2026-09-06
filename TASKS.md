@@ -150,13 +150,20 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 
 ## Phase 7 — deploy
 
-- [ ] **Spike first:** deploy a trivial SSE route and confirm App Hosting does not buffer it, *before*
-      the UI depends on it (see the open risk in PLAN.md)
-- [ ] `firebase apphosting:backends:create --location europe-west4` (browser step)
-- [ ] `firebase apphosting:secrets:grantaccess anthropic-api-key --backend <id>`
-- [ ] Grant `roles/iam.serviceAccountTokenCreator` on `firebase-app-hosting-compute@claudebook-lm`
-      **to itself** (moved here from phase 0b — the SA is created by `backends:create`). Without it
-      `createSessionCookie` fails under ADC, so sign-in breaks in production only.
+- [x] `firebase apphosting:backends:create` — created `claudebook` in `europe-west4`, runtime
+      nodejs22, linked to web app `1:428276124646:web:450dc028026fbc20b4a427`.
+      URL: `https://claudebook--claudebook-lm.europe-west4.hosted.app`
+      **Note:** the flag is `--primary-region`, not `--location` as PLAN.md says.
+- [x] `firebase apphosting:secrets:grantaccess anthropic-api-key --backend claudebook`
+- [x] Grant `roles/iam.serviceAccountTokenCreator` on `firebase-app-hosting-compute@claudebook-lm`
+      to itself. **Probably unnecessary** — see the correction below — but harmless, so it stands
+      until a production sign-in proves it either way.
+- [!] **Link the GitHub repository.** Run non-interactively, `backends:create` silently skipped the
+      Developer Connect step, so the backend has no repository and no rollout can be created
+      (`rollouts:create` takes a git branch or commit). `gcloud beta developer-connect connections
+      list` returns nothing, and there is no `backends:update`. Fix: delete the empty backend and
+      re-create it interactively so the GitHub App authorization prompt appears.
+- [ ] **Spike:** deploy a trivial SSE route and confirm App Hosting does not buffer it
 - [ ] First rollout; confirm auto-deploy on push to `main`
 - [ ] Add `<backend>--claudebook-lm.europe-west4.hosted.app` to Firebase Auth authorized domains —
       **verify whether this is automatic**; symptom if missing is `auth/unauthorized-domain`
@@ -164,6 +171,15 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
       (done early: it needs nothing from the deploy)
 - [ ] **Verify in prod:** sign in → create notebook → upload a PDF → grounded question → generate an
       artifact → download → delete, confirming the session is archived and its files removed
+
+### Corrections to PLAN.md found in this phase
+
+- `apphosting:backends:create` takes **`--primary-region`**, not `--location`.
+- **`createSessionCookie` does not use `signBlob`.** PLAN.md says minting a session cookie under ADC
+  signs remotely, hence the token-creator self-grant. `firebase-admin`'s `BaseAuth.createSessionCookie`
+  goes through `authRequestHandler` — a REST call to Identity Toolkit's `:createSessionCookie`. Only
+  `createCustomToken` uses the crypto signer. The grant is applied anyway as cheap insurance, but the
+  stated reason for it is wrong.
 
 ---
 
