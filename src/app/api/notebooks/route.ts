@@ -28,7 +28,10 @@ export async function POST(request: Request) {
 
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: "Expected { title, icon?, model?, customInstructions? }." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Expected { title, icon?, model?, customInstructions? }." },
+        { status: 400 },
+      );
     }
 
     const notebook = await createNotebook(user.uid, parsed.data);

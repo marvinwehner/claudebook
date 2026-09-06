@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+
+import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,9 +10,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
+    // suppressHydrationWarning because next-themes writes the class on <html>
+    // before React hydrates — that mismatch is the mechanism, not a bug.
     <html lang="en" suppressHydrationWarning>
       <body className="bg-background text-foreground min-h-dvh antialiased">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

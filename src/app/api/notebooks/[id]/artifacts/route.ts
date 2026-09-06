@@ -10,7 +10,9 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/notebooks/[
     const user = await requireUser();
     const { id } = await ctx.params;
     const notebook = await requireNotebook(id, user.uid);
-    return NextResponse.json({ artifacts: await listNotebookArtifacts(notebook) });
+    return NextResponse.json({
+      artifacts: await listNotebookArtifacts(notebook),
+    });
   } catch (error) {
     return toErrorResponse(error);
   }

@@ -14,7 +14,11 @@ export interface SessionSpec {
   model: NotebookModel;
   customInstructions?: string;
   /** The Firestore source index — the durable record of what should be mounted. */
-  sources: Array<{ sourceId: string; filename: string; anthropicFileId: string }>;
+  sources: Array<{
+    sourceId: string;
+    filename: string;
+    anthropicFileId: string;
+  }>;
 }
 
 export interface EnsureSessionResult {
@@ -155,7 +159,10 @@ export async function sendUserMessage(
   ];
 
   if (systemNote) {
-    events.push({ type: "system.message", content: [{ type: "text", text: systemNote }] });
+    events.push({
+      type: "system.message",
+      content: [{ type: "text", text: systemNote }],
+    });
   }
 
   await anthropic().beta.sessions.events.send(sessionId, { events });

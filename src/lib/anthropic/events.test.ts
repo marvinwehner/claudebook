@@ -24,7 +24,13 @@ describe("normalizeEvent", () => {
       }),
     );
 
-    expect(result).toEqual({ kind: "message", id: "sevt_1", at: AT, text: "Hello world" });
+    expect(result).toEqual({
+      kind: "message",
+      id: "sevt_1",
+      at: AT,
+      role: "agent",
+      text: "Hello world",
+    });
   });
 
   it("keys a delta by the previewed event's id, not its own", () => {
@@ -32,11 +38,20 @@ describe("normalizeEvent", () => {
       asEvent({
         type: "event_delta",
         event_id: "sevt_1",
-        delta: { type: "content_delta", index: 2, content: { type: "text", text: "chunk" } },
+        delta: {
+          type: "content_delta",
+          index: 2,
+          content: { type: "text", text: "chunk" },
+        },
       }),
     );
 
-    expect(result).toEqual({ kind: "delta", id: "sevt_1", index: 2, text: "chunk" });
+    expect(result).toEqual({
+      kind: "delta",
+      id: "sevt_1",
+      index: 2,
+      text: "chunk",
+    });
   });
 
   it("defaults a delta's index to 0 when the server omits it", () => {
@@ -55,20 +70,36 @@ describe("normalizeEvent", () => {
     // agent.thinking is start-only: no deltas follow and the buffered event
     // carries no content either.
     expect(
-      normalizeEvent(asEvent({ type: "event_start", event: { type: "agent.thinking", id: "sevt_2" } })),
+      normalizeEvent(
+        asEvent({
+          type: "event_start",
+          event: { type: "agent.thinking", id: "sevt_2" },
+        }),
+      ),
     ).toEqual({ kind: "thinking", id: "sevt_2", at: "" });
   });
 
   it("ignores an agent.message preview start — the first delta opens the buffer", () => {
     expect(
-      normalizeEvent(asEvent({ type: "event_start", event: { type: "agent.message", id: "sevt_1" } })),
+      normalizeEvent(
+        asEvent({
+          type: "event_start",
+          event: { type: "agent.message", id: "sevt_1" },
+        }),
+      ),
     ).toBeNull();
   });
 
   it("maps tool use and tool result to the two phases of one tool", () => {
     expect(
       normalizeEvent(
-        asEvent({ type: "agent.tool_use", id: "sevt_3", processed_at: AT, name: "read", input: {} }),
+        asEvent({
+          type: "agent.tool_use",
+          id: "sevt_3",
+          processed_at: AT,
+          name: "read",
+          input: {},
+        }),
       ),
     ).toEqual({
       kind: "tool",
@@ -89,7 +120,14 @@ describe("normalizeEvent", () => {
           is_error: true,
         }),
       ),
-    ).toEqual({ kind: "tool", id: "sevt_4", at: AT, phase: "end", toolUseId: "sevt_3", isError: true });
+    ).toEqual({
+      kind: "tool",
+      id: "sevt_4",
+      at: AT,
+      phase: "end",
+      toolUseId: "sevt_3",
+      isError: true,
+    });
   });
 
   it("carries the stop reason on idle", () => {
@@ -102,7 +140,13 @@ describe("normalizeEvent", () => {
           stop_reason: { type: "requires_action", event_ids: ["sevt_3"] },
         }),
       ),
-    ).toEqual({ kind: "status", id: "sevt_5", at: AT, status: "idle", stopReason: "requires_action" });
+    ).toEqual({
+      kind: "status",
+      id: "sevt_5",
+      at: AT,
+      status: "idle",
+      stopReason: "requires_action",
+    });
   });
 
   it("surfaces a session error's message", () => {
@@ -118,9 +162,27 @@ describe("normalizeEvent", () => {
     ).toEqual({ kind: "error", id: "sevt_6", at: AT, message: "Overloaded" });
   });
 
+  it("renders an echoed user.message so a reload shows both sides", () => {
+    expect(
+      normalizeEvent(
+        asEvent({
+          type: "user.message",
+          id: "sevt_0",
+          processed_at: AT,
+          content: [{ type: "text", text: "What does it say?" }],
+        }),
+      ),
+    ).toEqual({
+      kind: "message",
+      id: "sevt_0",
+      at: AT,
+      role: "user",
+      text: "What does it say?",
+    });
+  });
+
   it("returns null for events the UI does not render", () => {
     for (const type of [
-      "user.message",
       "session.thread_created",
       "span.model_request_start",
       "agent.thread_message_sent",
@@ -147,7 +209,15 @@ describe("isTurnComplete", () => {
 
   it("is false for every other event", () => {
     expect(isTurnComplete({ kind: "status", id: "a", at: AT, status: "running" })).toBe(false);
-    expect(isTurnComplete({ kind: "message", id: "a", at: AT, text: "hi" })).toBe(false);
+    expect(
+      isTurnComplete({
+        kind: "message",
+        id: "a",
+        at: AT,
+        role: "agent",
+        text: "hi",
+      }),
+    ).toBe(false);
   });
 });
 
@@ -158,7 +228,10 @@ describe("cursor codec", () => {
   });
 
   it("splits on the first separator so an id containing one survives", () => {
-    expect(decodeCursor(`${AT}|sevt_a|b`)).toEqual({ timestamp: AT, eventId: "sevt_a|b" });
+    expect(decodeCursor(`${AT}|sevt_a|b`)).toEqual({
+      timestamp: AT,
+      eventId: "sevt_a|b",
+    });
   });
 
   it("strips newlines, which would terminate the SSE id field early", () => {

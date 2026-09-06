@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "provision": "tsx --env-file=.env.local scripts/provision.ts"
+    "provision": "tsx --env-file=.env.local scripts/provision.ts",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

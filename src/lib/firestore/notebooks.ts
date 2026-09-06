@@ -1,6 +1,11 @@
 import "server-only";
 
-import { FieldValue, Timestamp, type DocumentData, type QueryDocumentSnapshot } from "firebase-admin/firestore";
+import {
+  FieldValue,
+  Timestamp,
+  type DocumentData,
+  type QueryDocumentSnapshot,
+} from "firebase-admin/firestore";
 
 import type { NotebookModel } from "@/lib/anthropic/agent";
 import { adminDb } from "@/lib/firebase/admin";
@@ -114,7 +119,13 @@ export async function listNotebooks(ownerId: string): Promise<Notebook[]> {
 export type NotebookPatch = Partial<
   Pick<
     Notebook,
-    "title" | "icon" | "model" | "customInstructions" | "sessionId" | "agentVersion" | "sessionStatus"
+    | "title"
+    | "icon"
+    | "model"
+    | "customInstructions"
+    | "sessionId"
+    | "agentVersion"
+    | "sessionStatus"
   >
 > & {
   pendingSeedNote?: string | null;

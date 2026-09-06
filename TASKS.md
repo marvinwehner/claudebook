@@ -126,17 +126,27 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 
 ## Phase 6 — UI
 
-- [ ] App shell — hand-rolled `<nav>` (HeroUI v3 removed `Navbar`), `next-themes` toggle with mount guard
-- [ ] Notebook grid + create dialog (model picker: Sonnet 5 default / Opus 5 opt-in, **fixed after create**)
-- [ ] Notebook page — three panes: sources rail, chat, artifacts rail
-- [ ] Streaming chat via `EventSource` + `streamdown`; discard the delta buffer when the authoritative
+- [x] App shell — hand-rolled `<nav>` (HeroUI v3 removed `Navbar`), `next-themes` toggle with mount guard
+- [x] Notebook grid + create dialog (model picker: Sonnet 5 default / Opus 5 opt-in, **fixed after create**)
+- [x] Notebook page — three panes: sources rail, chat, artifacts rail
+- [x] Streaming chat via `EventSource` + `streamdown`; discard the delta buffer when the authoritative
       `agent.message` arrives
-- [ ] Tool-activity + thinking indicators
-- [ ] Upload via `DropZone` + `FileTrigger` from `react-aria-components` (already a HeroUI peer)
-- [ ] Artifact list, preview, download
-- [ ] "Changing the model starts a fresh conversation" confirm dialog
+- [x] Tool-activity + thinking indicators
+- [x] Upload via `DropZone` + `FileTrigger` from `react-aria-components` (already a HeroUI peer)
+- [x] Artifact list, preview, download
+- [x] "Changing the model starts a fresh conversation" confirm dialog
 - [ ] **Verify:** full flow in a browser; kill the network mid-stream and confirm the SSE cursor resumes
-      losslessly
+      losslessly. **Blocked on `gcloud auth application-default login`** — same blocker as phase 5.
+
+### Notes
+
+- `normalizeEvent` now renders the echoed `user.message` too. Without it a reload showed the
+  assistant's half of the conversation and none of the user's — we keep no second copy of the
+  transcript, so the echo *is* the record.
+- The mount guard uses `useSyncExternalStore` rather than `useEffect(() => setMounted(true))`;
+  React 19's `set-state-in-effect` rule rejects the older idiom.
+- Added `prettier` (printWidth 100, matching how the code was already written) and an `npm run
+  format` script.
 
 ## Phase 7 — deploy
 

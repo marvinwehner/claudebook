@@ -4,11 +4,7 @@ import { z } from "zod";
 import { NOTEBOOK_MODELS } from "@/lib/anthropic/agent";
 import { requireUser } from "@/lib/auth/dal";
 import { toErrorResponse } from "@/lib/notebooks/errors";
-import {
-  deleteNotebook,
-  requireNotebook,
-  updateNotebook,
-} from "@/lib/notebooks/notebook-service";
+import { deleteNotebook, requireNotebook, updateNotebook } from "@/lib/notebooks/notebook-service";
 
 const patchSchema = z
   .object({
@@ -17,7 +13,9 @@ const patchSchema = z
     model: z.enum(NOTEBOOK_MODELS).optional(),
     customInstructions: z.string().max(20_000).optional(),
   })
-  .refine((value) => Object.keys(value).length > 0, { message: "Nothing to update." });
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "Nothing to update.",
+  });
 
 export async function GET(_request: Request, ctx: RouteContext<"/api/notebooks/[id]">) {
   try {
@@ -37,7 +35,10 @@ export async function PATCH(request: Request, ctx: RouteContext<"/api/notebooks/
 
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid body." }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? "Invalid body." },
+        { status: 400 },
+      );
     }
 
     const result = await updateNotebook(notebook, parsed.data);

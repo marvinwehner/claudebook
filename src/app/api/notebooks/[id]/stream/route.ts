@@ -63,15 +63,28 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
       const emit = (raw: { id: string; processed_at?: string | null }, event: UiEvent | null) => {
         if (!event || seen.has(raw.id)) return;
         seen.add(raw.id);
-        send(frame(event, encodeCursor({ timestamp: raw.processed_at ?? "", eventId: raw.id })));
+        send(
+          frame(
+            event,
+            encodeCursor({
+              timestamp: raw.processed_at ?? "",
+              eventId: raw.id,
+            }),
+          ),
+        );
       };
+
+      // We close ourselves every 4 minutes, so EventSource's 3s default retry
+      // would leave a visible gap after every one. Ask for a shorter one.
+      send("retry: 750\n\n");
 
       // Intermediaries drop connections that go quiet; a comment frame is the
       // cheapest thing that counts as traffic.
       const heartbeat = setInterval(() => send(": ping\n\n"), HEARTBEAT_MS);
       const selfClose = setTimeout(() => finish(), SELF_CLOSE_MS);
 
-      let stream: Stream<Anthropic.Beta.Sessions.BetaManagedAgentsStreamSessionEvents> | null = null;
+      let stream: Stream<Anthropic.Beta.Sessions.BetaManagedAgentsStreamSessionEvents> | null =
+        null;
 
       function finish() {
         if (closed) return;

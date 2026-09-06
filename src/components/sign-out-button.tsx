@@ -22,7 +22,7 @@ export function SignOutButton() {
   }
 
   return (
-    <Button className="mt-6" variant="tertiary" isPending={busy} onPress={handleSignOut}>
+    <Button size="sm" variant="ghost" isPending={busy} onPress={handleSignOut}>
       Sign out
     </Button>
   );

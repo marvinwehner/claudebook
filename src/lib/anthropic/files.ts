@@ -33,7 +33,9 @@ export async function uploadSource(file: File): Promise<UploadedSource> {
   // The Files API is out of beta and takes no `purpose` — docs that mention
   // purpose: "agent" predate that.
   const uploaded = await anthropic().files.upload({
-    file: await toFile(file, file.name, { type: file.type || "application/octet-stream" }),
+    file: await toFile(file, file.name, {
+      type: file.type || "application/octet-stream",
+    }),
   });
 
   return {
@@ -62,7 +64,9 @@ export async function mountSource(
 }
 
 export async function unmountSource(sessionId: string, resourceId: string): Promise<void> {
-  await anthropic().beta.sessions.resources.delete(resourceId, { session_id: sessionId });
+  await anthropic().beta.sessions.resources.delete(resourceId, {
+    session_id: sessionId,
+  });
 }
 
 export async function deleteFile(anthropicFileId: string): Promise<void> {

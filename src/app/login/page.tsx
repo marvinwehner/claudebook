@@ -48,7 +48,9 @@ export default function LoginPage() {
       });
 
       if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
         // The server refused and deleted the account it just saw. Drop the
         // client-side session too, or the UI claims to be signed in.
         await signOut(auth).catch(() => {});

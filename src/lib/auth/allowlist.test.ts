@@ -15,7 +15,10 @@ describe("parseList", () => {
 });
 
 describe("isAllowed", () => {
-  const list: Allowlist = { emails: ["marvin.wehner@gmx.de"], domains: ["example.com"] };
+  const list: Allowlist = {
+    emails: ["marvin.wehner@gmx.de"],
+    domains: ["example.com"],
+  };
 
   it("matches an allowlisted address regardless of case or padding", () => {
     expect(isAllowed("marvin.wehner@gmx.de", list)).toBe(true);

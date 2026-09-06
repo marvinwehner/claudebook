@@ -12,7 +12,13 @@ import type { Anthropic } from "@anthropic-ai/sdk";
 type SessionEvent = Anthropic.Beta.Sessions.BetaManagedAgentsStreamSessionEvents;
 
 export type UiEvent =
-  | { kind: "message"; id: string; at: string; text: string }
+  | {
+      kind: "message";
+      id: string;
+      at: string;
+      role: "user" | "agent";
+      text: string;
+    }
   /** Best-effort live preview. Superseded by the `message` with the same id. */
   | { kind: "delta"; id: string; index: number; text: string }
   | { kind: "thinking"; id: string; at: string }
@@ -32,7 +38,13 @@ export type UiEvent =
       status: "running" | "idle" | "terminated" | "rescheduling";
       stopReason?: string;
     }
-  | { kind: "usage"; id: string; at: string; inputTokens: number; outputTokens: number }
+  | {
+      kind: "usage";
+      id: string;
+      at: string;
+      inputTokens: number;
+      outputTokens: number;
+    }
   | { kind: "error"; id: string; at: string; message: string };
 
 function textOf(content: Array<{ type: string; text?: string }>): string {
@@ -43,8 +55,8 @@ function textOf(content: Array<{ type: string; text?: string }>): string {
 }
 
 /**
- * Returns null for events we do not render — thread bookkeeping, echoed user
- * events, outcome spans. Dropping them here keeps the SSE frame budget for
+ * Returns null for events we do not render — thread bookkeeping, model-request
+ * spans, outcome evaluation. Dropping them here keeps the SSE frame budget for
  * things the UI reacts to.
  */
 export function normalizeEvent(event: SessionEvent): UiEvent | null {
@@ -54,6 +66,19 @@ export function normalizeEvent(event: SessionEvent): UiEvent | null {
         kind: "message",
         id: event.id,
         at: event.processed_at,
+        role: "agent",
+        text: textOf(event.content),
+      };
+
+    // The stream echoes back what we sent. Rendering it is what makes a reload
+    // show the conversation rather than a monologue — we do not keep a second
+    // copy of the transcript anywhere.
+    case "user.message":
+      return {
+        kind: "message",
+        id: event.id,
+        at: event.processed_at ?? "",
+        role: "user",
         text: textOf(event.content),
       };
 
@@ -98,7 +123,12 @@ export function normalizeEvent(event: SessionEvent): UiEvent | null {
       };
 
     case "session.status_running":
-      return { kind: "status", id: event.id, at: event.processed_at, status: "running" };
+      return {
+        kind: "status",
+        id: event.id,
+        at: event.processed_at,
+        status: "running",
+      };
 
     case "session.status_idle":
       return {
@@ -110,10 +140,20 @@ export function normalizeEvent(event: SessionEvent): UiEvent | null {
       };
 
     case "session.status_terminated":
-      return { kind: "status", id: event.id, at: event.processed_at, status: "terminated" };
+      return {
+        kind: "status",
+        id: event.id,
+        at: event.processed_at,
+        status: "terminated",
+      };
 
     case "session.status_rescheduled":
-      return { kind: "status", id: event.id, at: event.processed_at, status: "rescheduling" };
+      return {
+        kind: "status",
+        id: event.id,
+        at: event.processed_at,
+        status: "rescheduling",
+      };
 
     case "session.usage":
       return {
@@ -139,7 +179,9 @@ export function normalizeEvent(event: SessionEvent): UiEvent | null {
 
 /** A turn is over only when the agent is idle and not waiting on us. */
 export function isTurnComplete(event: UiEvent): boolean {
-  return event.kind === "status" && event.status === "idle" && event.stopReason !== "requires_action";
+  return (
+    event.kind === "status" && event.status === "idle" && event.stopReason !== "requires_action"
+  );
 }
 
 // --- SSE cursor -----------------------------------------------------------

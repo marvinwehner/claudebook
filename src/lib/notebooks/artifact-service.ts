@@ -26,11 +26,19 @@ export async function listNotebookArtifacts(notebook: Notebook): Promise<Artifac
 export async function downloadNotebookArtifact(
   notebook: Notebook,
   fileId: string,
-): Promise<{ body: ReadableStream<Uint8Array> | null; filename: string; mimeType: string }> {
+): Promise<{
+  body: ReadableStream<Uint8Array> | null;
+  filename: string;
+  mimeType: string;
+}> {
   const artifacts = await listNotebookArtifacts(notebook);
   const artifact = artifacts.find((candidate) => candidate.fileId === fileId);
   if (!artifact) throw new NotFoundError("Artifact not found.");
 
   const response = await downloadArtifact(fileId);
-  return { body: response.body, filename: artifact.filename, mimeType: artifact.mimeType };
+  return {
+    body: response.body,
+    filename: artifact.filename,
+    mimeType: artifact.mimeType,
+  };
 }

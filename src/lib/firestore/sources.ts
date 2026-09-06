@@ -1,6 +1,11 @@
 import "server-only";
 
-import { FieldValue, Timestamp, type DocumentData, type QueryDocumentSnapshot } from "firebase-admin/firestore";
+import {
+  FieldValue,
+  Timestamp,
+  type DocumentData,
+  type QueryDocumentSnapshot,
+} from "firebase-admin/firestore";
 
 import { adminDb } from "@/lib/firebase/admin";
 
@@ -81,7 +86,9 @@ export async function setSessionResourceIds(
 
   const batch = adminDb().batch();
   for (const [sourceId, resourceId] of entries) {
-    batch.update(subcollection(notebookId).doc(sourceId), { sessionResourceId: resourceId });
+    batch.update(subcollection(notebookId).doc(sourceId), {
+      sessionResourceId: resourceId,
+    });
   }
   await batch.commit();
 }

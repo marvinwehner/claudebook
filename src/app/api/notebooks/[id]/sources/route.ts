@@ -28,7 +28,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/notebooks/[
     const notebook = await requireNotebook(id, user.uid);
 
     const form = await request.formData().catch(() => null);
-    const files = form?.getAll("file").filter((entry): entry is File => entry instanceof File) ?? [];
+    const files =
+      form?.getAll("file").filter((entry): entry is File => entry instanceof File) ?? [];
     if (files.length === 0) {
       throw new ValidationError("Expected at least one file in a `file` form field.");
     }

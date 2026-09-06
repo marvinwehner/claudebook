@@ -69,7 +69,10 @@ export const AGENT_TOOLS = [
   // The whole built-in toolset: read/grep/glob over the mounted sources, write
   // for artifacts, bash for unpacking, web_search/web_fetch for anything the
   // sources do not cover.
-  { type: "agent_toolset_20260401" as const, default_config: { enabled: true } },
+  {
+    type: "agent_toolset_20260401" as const,
+    default_config: { enabled: true },
+  },
 ];
 
 export const ENVIRONMENT_CONFIG = {

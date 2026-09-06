@@ -30,7 +30,12 @@ export async function requireNotebook(id: string, ownerId: string): Promise<Note
 
 export async function createNotebook(
   ownerId: string,
-  input: { title: string; icon?: string; model?: string; customInstructions?: string },
+  input: {
+    title: string;
+    icon?: string;
+    model?: string;
+    customInstructions?: string;
+  },
 ): Promise<Notebook> {
   const title = input.title.trim();
   if (!title) throw new ValidationError("A notebook needs a title.");

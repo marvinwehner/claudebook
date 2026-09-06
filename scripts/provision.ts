@@ -22,7 +22,9 @@ import {
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 if (!apiKey) {
-  console.error("ANTHROPIC_API_KEY is not set. Run with: npx tsx --env-file=.env.local scripts/provision.ts");
+  console.error(
+    "ANTHROPIC_API_KEY is not set. Run with: npx tsx --env-file=.env.local scripts/provision.ts",
+  );
   process.exit(1);
 }
 
@@ -62,7 +64,8 @@ function agentMatches(agent: {
   description?: string | null;
   tools?: unknown;
 }): boolean {
-  const liveModel = typeof agent.model === "string" ? agent.model : (agent.model as { id?: string })?.id;
+  const liveModel =
+    typeof agent.model === "string" ? agent.model : (agent.model as { id?: string })?.id;
 
   return (
     liveModel === AGENT_CONFIG.model &&
@@ -71,8 +74,9 @@ function agentMatches(agent: {
     // The API returns tools resolved (defaults filled in), so comparing the
     // whole object would never match. The set of toolset types is what we
     // actually control from here.
-    JSON.stringify((agent.tools as Array<{ type: string }> | undefined)?.map((t) => t.type) ?? []) ===
-      JSON.stringify(AGENT_CONFIG.tools.map((t) => t.type))
+    JSON.stringify(
+      (agent.tools as Array<{ type: string }> | undefined)?.map((t) => t.type) ?? [],
+    ) === JSON.stringify(AGENT_CONFIG.tools.map((t) => t.type))
   );
 }
 
