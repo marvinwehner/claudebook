@@ -57,12 +57,27 @@ async function ensureEnvironment() {
   return created;
 }
 
+/**
+ * `type:skill_id`, sorted and joined. Same story as tools: the API echoes a
+ * `version` back ("latest", for an unpinned skill) where the committed config
+ * omits the field entirely, so version cannot be part of the comparison.
+ * Sorted so that config order is not a false difference.
+ */
+function skillKeys(skills: unknown): string {
+  const list = (skills as Array<{ type?: string; skill_id?: string }> | undefined) ?? [];
+  return list
+    .map((skill) => `${skill.type}:${skill.skill_id}`)
+    .sort()
+    .join(",");
+}
+
 /** True when the live agent already matches the committed config. */
 function agentMatches(agent: {
   model?: unknown;
   system?: string | null;
   description?: string | null;
   tools?: unknown;
+  skills?: unknown;
 }): boolean {
   const liveModel =
     typeof agent.model === "string" ? agent.model : (agent.model as { id?: string })?.id;
@@ -76,7 +91,8 @@ function agentMatches(agent: {
     // actually control from here.
     JSON.stringify(
       (agent.tools as Array<{ type: string }> | undefined)?.map((t) => t.type) ?? [],
-    ) === JSON.stringify(AGENT_CONFIG.tools.map((t) => t.type))
+    ) === JSON.stringify(AGENT_CONFIG.tools.map((t) => t.type)) &&
+    skillKeys(agent.skills) === skillKeys(AGENT_CONFIG.skills)
   );
 }
 

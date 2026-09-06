@@ -51,7 +51,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
       during `next build`, so validating at module scope breaks the build
 - [x] `engines.node: "22"`, lock file committed (App Hosting fails the build without one)
 - [x] **Verify:** `npm run build` + `npm run lint` + `tsc --noEmit` pass; `firebase deploy --only
-    firestore` succeeded (rules released, index built).
+firestore` succeeded (rules released, index built).
 
 ## Phase 3 — auth
 
@@ -237,6 +237,18 @@ is the only credential-shaped value ever committed.
       and a decision on who may raise a cap (removal is one-way: a removed budget can never be
       re-added).
 
+### Two things the run contradicted
+
+- **A `.pptx` comes back from the Files API as `application/zip`, not the Office mime type.**
+  Harmless as it stands — `Content-Disposition: attachment` plus the `.pptx` filename means
+  the browser saves it correctly, and `PREVIEWABLE` still (correctly) declines to preview it —
+  but it is why `artifactIcon()` keys on the filename extension. A mime-keyed icon map would
+  have silently fallen through to the generic glyph for every Office document.
+- **The pptx skill brought its own toolchain.** The observed run built the deck with pptxgenjs
+  rather than the pre-installed python-pptx, so the skills lean on the environment's
+  `unrestricted` networking more than the sandbox's package list suggests. Nothing to fix
+  today; it just means a future `limited` policy is not the free change it looks like.
+
 ### Correction this phase forced
 
 - **Eagerly creating a session does not pre-warm its container.** The comment in `createNotebook`
@@ -246,6 +258,48 @@ is the only credential-shaped value ever committed.
   create is still worth keeping, for the stable session id, but the stated reason was wrong.
   (The other half of the comment was right: idle sessions bill nothing. Runtime is metered on
   `usage.active_seconds` — time with ≥1 thread running — at $0.08/hour.)
+
+---
+
+## Phase 9 — document skills (pptx / xlsx / docx / pdf)
+
+- [x] `lib/anthropic/agent.ts` — `AGENT_SKILLS`, Anthropic's four pre-built document skills,
+      attached to `AGENT_CONFIG`. That is the complete pre-built set; everything else on
+      claude.ai is a user-uploaded custom skill.
+- [x] `lib/anthropic/agent.ts` — the artifacts prompt said to write a document **as Markdown**,
+      which would have steered the agent away from a real deck even with the skill attached.
+      Now: Markdown by default, the real format when asked for, and _everything_ in
+      `/mnt/session/outputs/` — the skills have no idea that directory is special.
+- [x] `scripts/provision.ts` — `agentMatches()` compares skills as a sorted set of
+      `type:skill_id`. The API echoes a `version` back ("latest", for an unpinned skill) where
+      the committed config omits the field, so version cannot be part of the comparison.
+      Without this the drift is invisible and provision reports `ok` forever, so the skills
+      would never reach the live agent.
+- [x] `components/artifacts-rail.tsx` — an icon per output format, keyed on the filename
+      extension rather than the mime type, since the agent is what names the file.
+- [x] **Verified.** Provision run twice — `v1 -> v2`, then `ok`. A live session on agent v2
+      carrying all four skills was asked for "a 3-slide PowerPoint summarising this log" and
+      wrote `orbit-log-summary.pptx` (153 KB) into `/mnt/session/outputs/`, where
+      `listArtifacts` picked it up. Still worth one click-through in the browser to see the
+      rail render it.
+
+### Known limits, accepted
+
+- **Existing notebooks do not gain the skills until their session is rebuilt.** Skills are
+  create-only, exactly like the model and the budget cap above. Deliberately not retrofitted:
+  the only lever is archiving the session, which destroys the transcript. `ensureSession`
+  rebuilds onto the current agent version on its own, so the fleet converges.
+- **A notebook with custom instructions loses the outputs-dir rule.** `createSession` sends
+  `system: customInstructions` and overrides replace in full, so such a notebook may build a
+  deck outside `/mnt/session/outputs/` and it will never reach the rail. Pre-existing — it
+  applies to Markdown artifacts too — but the skills make it easier to hit.
+
+### Correction this phase forced
+
+- **PLAN.md said artifacts are Markdown.** That was a settled decision and it is now wrong:
+  the `system` bullet under `### The agent` has been amended to Markdown-by-default with the
+  real file format when asked for. Changed deliberately, at the user's request, not routed
+  around.
 
 ---
 

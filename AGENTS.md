@@ -71,6 +71,12 @@ Load the `claude-api` skill before touching SDK code. Beyond it, these were foun
   `lib/anthropic/agent.ts` exports both.
 - A session's **model is fixed at create time**, so changing a notebook's model means a new session.
   That is why the UI confirms it.
+- **Skills are fixed at session create too**, and `sessions.update` accepts only `tools` and
+  `mcp_servers`. Attaching a skill to the agent does nothing for a notebook whose session already
+  exists; it picks it up when that session is next rebuilt. And a skill writes wherever the model
+  tells it to, so the system prompt has to say that _everything_ lands in `/mnt/session/outputs/`
+  — only that directory is captured by the Files API, so a `.pptx` built anywhere else exists in
+  the sandbox and nowhere the user can reach.
 - One shared agent and one shared environment, never one per notebook — isolation is already the
   session's job. Per-notebook variation goes through `agent_with_overrides` at session create, and
   overrides **replace in full, never merge**.
@@ -85,6 +91,17 @@ A ground-up rewrite; every v2 tutorial is wrong. No `HeroUIProvider`, no `tailwi
 - `onPress`, not `onClick`. `useOverlayState()`, not `useDisclosure`.
 - Upload uses `DropZone` + `FileTrigger` from `react-aria-components` — a direct dependency of
   `@heroui/react`, so it is version-aligned by construction. Do not add it as its own dependency.
+- **`Modal` and `AlertDialog` roots _are_ React Aria's `DialogTrigger`.** The root wraps its
+  children in a `PressResponder` and warns once on mount — "A PressResponder was rendered without
+  a pressable child" — if none of them is pressable. A dialog opened programmatically has no
+  trigger to put there, and HeroUI ships no trigger-less root, so `artifacts-rail`'s preview modal
+  and `notebook-settings`' model-change confirm still log it. Dev-only and harmless; don't add a
+  dummy pressable to silence it.
+- That `PressResponder` also merges the trigger's `onPress` into **every** pressable beneath it,
+  including the dialog's own footer buttons — React Aria never clears the context, and portals
+  keep it flowing. So a root driven by `state`/`isOpen` closes itself when any inner button is
+  pressed. Where a footer button runs async work whose failure renders inside the dialog, keep the
+  open state on the `Backdrop` instead, as `notebook-settings`' delete confirm does.
 - Streamdown uses shadcn token names. `globals.css` maps them onto HeroUI's, and
   `.claudebook-markdown` remaps `--color-muted` locally because shadcn's `muted` is a _surface_
   while HeroUI's is a _text_ grey.

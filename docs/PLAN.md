@@ -219,9 +219,13 @@ One shared agent, provisioned by an idempotent script from committed config:
 - `tools: [{ type: 'agent_toolset_20260401', default_config: { enabled: true } }]` — the notebook agent
   needs `read`/`grep`/`glob` over mounted sources, `write` for artifacts, `bash` to unpack archives,
   and `web_search`/`web_fetch` for research.
+- `skills: [pptx, xlsx, docx, pdf]` — Anthropic's four pre-built document skills, unpinned. The
+  sandbox already ships python-pptx, openpyxl, python-docx, pypdf, LibreOffice and pandoc, so
+  nothing is fetched at run time. Fixed at session create, like the model.
 - `system`: the notebook persona — sources live under `/mnt/session/uploads/sources/`; ground every
-  claim in them and cite as `[filename]`; say plainly when the sources don't answer the question; write
-  artifacts to `/mnt/session/outputs/` as Markdown.
+  claim in them and cite as `[filename]`; say plainly when the sources don't answer the question;
+  every artifact lands in `/mnt/session/outputs/`, Markdown by default and a real
+  `.pptx`/`.xlsx`/`.docx`/`.pdf` when that is what was asked for.
 - One `cloud` environment, `networking: { type: 'unrestricted' }`.
 
 ---

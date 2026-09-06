@@ -88,11 +88,6 @@ export function NotebookSettings({
         </Select.Popover>
       </Select>
 
-      <Button size="sm" variant="ghost" onPress={confirmDelete.open}>
-        <TrashBin aria-hidden />
-        Delete
-      </Button>
-
       <AlertDialog>
         <AlertDialog.Backdrop isOpen={confirmModel.isOpen} onOpenChange={confirmModel.setOpen}>
           <AlertDialog.Container>
@@ -129,7 +124,20 @@ export function NotebookSettings({
         </AlertDialog.Backdrop>
       </AlertDialog>
 
+      {/*
+        The root is React Aria's DialogTrigger, which always wraps its children in a
+        PressResponder and warns on mount if none of them is pressable. Keeping the
+        button that opens this dialog inside the root satisfies that. The open state
+        stays on the Backdrop on purpose: the trigger's onPress is merged into every
+        pressable below it, so driving the root would let "Delete notebook" close the
+        dialog before remove() resolves, hiding the error this body renders.
+      */}
       <AlertDialog>
+        <Button size="sm" variant="ghost" onPress={confirmDelete.open}>
+          <TrashBin aria-hidden />
+          Delete
+        </Button>
+
         <AlertDialog.Backdrop isOpen={confirmDelete.isOpen} onOpenChange={confirmDelete.setOpen}>
           <AlertDialog.Container>
             <AlertDialog.Dialog>

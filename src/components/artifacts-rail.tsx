@@ -1,6 +1,15 @@
 "use client";
 
-import { ArrowDownToLine, Eye, FileText, Sparkles } from "@gravity-ui/icons";
+import {
+  ArrowDownToLine,
+  Eye,
+  FileLetterP,
+  FileLetterW,
+  FileLetterX,
+  FileText,
+  LogoAcrobat,
+  Sparkles,
+} from "@gravity-ui/icons";
 import { Button, Modal, Spinner, useOverlayState } from "@heroui/react";
 import { useState } from "react";
 import { Streamdown } from "streamdown";
@@ -9,6 +18,20 @@ import type { Artifact } from "@/lib/anthropic/files";
 import { api } from "@/lib/api/client";
 
 const PREVIEWABLE = /^(text\/|application\/json)/;
+
+/**
+ * A glyph per output format — enough to scan the list by shape, not a MIME
+ * taxonomy. Keyed on the extension rather than the mime type: the agent names
+ * the file, so the extension is the part we control.
+ */
+function artifactIcon(filename: string) {
+  const ext = filename.slice(filename.lastIndexOf(".") + 1).toLowerCase();
+  if (ext === "pptx") return FileLetterP;
+  if (ext === "xlsx") return FileLetterX;
+  if (ext === "docx") return FileLetterW;
+  if (ext === "pdf") return LogoAcrobat;
+  return FileText;
+}
 
 export function ArtifactsRail({
   notebookId,
@@ -56,36 +79,40 @@ export function ArtifactsRail({
       <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
         {artifacts.length === 0 && !loading ? (
           <li className="text-muted px-2 py-4 text-center text-xs">
-            Documents the assistant writes — a briefing, a study guide — appear here.
+            Documents the assistant writes — a briefing, a slide deck — appear here.
           </li>
         ) : null}
 
-        {artifacts.map((artifact) => (
-          <li key={artifact.fileId} className="hover:bg-surface-secondary rounded-md px-2 py-2">
-            <p className="flex items-center gap-2 text-xs font-medium" title={artifact.filename}>
-              <FileText aria-hidden className="text-muted size-4 shrink-0" />
-              <span className="truncate">{artifact.filename}</span>
-            </p>
-            <div className="mt-1 flex gap-1">
-              {PREVIEWABLE.test(artifact.mimeType) ? (
-                <Button size="sm" variant="ghost" onPress={() => void open(artifact)}>
-                  <Eye aria-hidden />
-                  Preview
-                </Button>
-              ) : null}
-              {/* A plain link, so the browser's own download handling applies —
+        {artifacts.map((artifact) => {
+          const Icon = artifactIcon(artifact.filename);
+
+          return (
+            <li key={artifact.fileId} className="hover:bg-surface-secondary rounded-md px-2 py-2">
+              <p className="flex items-center gap-2 text-xs font-medium" title={artifact.filename}>
+                <Icon aria-hidden className="text-muted size-4 shrink-0" />
+                <span className="truncate">{artifact.filename}</span>
+              </p>
+              <div className="mt-1 flex gap-1">
+                {PREVIEWABLE.test(artifact.mimeType) ? (
+                  <Button size="sm" variant="ghost" onPress={() => void open(artifact)}>
+                    <Eye aria-hidden />
+                    Preview
+                  </Button>
+                ) : null}
+                {/* A plain link, so the browser's own download handling applies —
                   the route sets Content-Disposition. */}
-              <a
-                href={api.artifactUrl(notebookId, artifact.fileId)}
-                download={artifact.filename}
-                className="text-accent flex items-center gap-1.5 px-2 py-1 text-xs hover:underline"
-              >
-                <ArrowDownToLine aria-hidden className="size-3.5" />
-                Download
-              </a>
-            </div>
-          </li>
-        ))}
+                <a
+                  href={api.artifactUrl(notebookId, artifact.fileId)}
+                  download={artifact.filename}
+                  className="text-accent flex items-center gap-1.5 px-2 py-1 text-xs hover:underline"
+                >
+                  <ArrowDownToLine aria-hidden className="size-3.5" />
+                  Download
+                </a>
+              </div>
+            </li>
+          );
+        })}
       </ul>
 
       <Modal state={state}>

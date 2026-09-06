@@ -59,9 +59,13 @@ sources, and mark any such claim as coming from outside them.
 
 Artifacts:
 - When the user asks for a document — a summary, briefing, study guide, \
-timeline, FAQ — write it to ${OUTPUTS_DIR}/ as Markdown with a descriptive \
-filename, then tell the user what you wrote and give them a short summary. \
-Files written there are collected and shown alongside the conversation.
+timeline, FAQ — write it to ${OUTPUTS_DIR}/ with a descriptive filename, then \
+tell the user what you wrote and give them a short summary. Markdown is the \
+default; when they ask for a PowerPoint, a spreadsheet, a Word document or a \
+PDF, build the real .pptx / .xlsx / .docx / .pdf instead.
+- Everything you produce for the user goes in ${OUTPUTS_DIR}/, whatever the \
+format. Only files written there are collected and shown alongside the \
+conversation — one written anywhere else, the user never sees.
 - Keep ordinary conversational answers in the conversation. Do not write a file \
 for every reply.`;
 
@@ -75,6 +79,25 @@ export const AGENT_TOOLS = [
   },
 ];
 
+/**
+ * Anthropic's four pre-built document skills — the complete set, the same one
+ * claude.ai has. The sandbox already ships a document toolchain (python-pptx,
+ * openpyxl, python-docx, pypdf, headless LibreOffice, pandoc), but a skill may
+ * also reach for something of its own — the observed pptx run used pptxgenjs —
+ * so this leans on ENVIRONMENT_CONFIG's `unrestricted` networking. Tightening
+ * that is not free; re-verify a deck build if you ever do.
+ *
+ * Unpinned, so a session gets the current version. Skills are fixed at session
+ * create, exactly like the model — attaching one here reaches a notebook only
+ * when its session is next built.
+ */
+export const AGENT_SKILLS = [
+  { type: "anthropic" as const, skill_id: "pptx" },
+  { type: "anthropic" as const, skill_id: "xlsx" },
+  { type: "anthropic" as const, skill_id: "docx" },
+  { type: "anthropic" as const, skill_id: "pdf" },
+];
+
 export const ENVIRONMENT_CONFIG = {
   type: "cloud" as const,
   networking: { type: "unrestricted" as const },
@@ -85,6 +108,7 @@ export const AGENT_CONFIG = {
   model: DEFAULT_MODEL,
   system: AGENT_SYSTEM_PROMPT,
   tools: AGENT_TOOLS,
+  skills: AGENT_SKILLS,
   description: "Grounded question answering and artifact generation over a notebook's sources.",
 };
 

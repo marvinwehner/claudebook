@@ -7,19 +7,38 @@
 
 /* Streamdown is written against shadcn's token names. HeroUI v3 already defines
    --color-background, --color-foreground, --color-border and --color-muted, so
-   only the three it lacks need declaring. Non-inline @theme on purpose: the
-   utilities then emit var(--color-*), which the scoped override below can
-   redefine. */
+   only the three it lacks need declaring. */
 @theme {
   --color-muted-foreground: var(--muted);
   --color-primary: var(--accent);
   --color-primary-foreground: var(--accent-foreground);
 }
 
-/* shadcn's `muted` is a low-contrast *surface*; HeroUI's --muted is a mid-grey
-   *text* colour. Streamdown wants the former (bg-muted on code blocks and
-   tables), HeroUI components want the latter — so remap it only inside the
-   markdown container. Apply this class to <Streamdown className=…>. */
+/* Streamdown paints its own chrome from shadcn's palette, and three of those
+   names land wrong on HeroUI: `bg-muted` (code chips, table headers) resolves to
+   --muted, which is a mid-grey *text* colour, so the chip is dark-on-dark in
+   light mode and light-on-light in dark mode; `bg-sidebar` (the code-block
+   frame) is a token HeroUI has no equivalent for, so the frame gets no fill at
+   all; and `bg-background` (the code body) is the page colour, so the block does
+   not separate from what is behind it.
+
+   Redefining --color-muted does not fix the first one: HeroUI declares its
+   tokens with `@theme inline`, so `bg-muted` compiles to a literal var(--muted)
+   and never reads --color-muted. Paint the parts directly instead, through the
+   data-streamdown hooks — unlayered, so these beat Tailwind's utilities layer
+   without needing !important. Apply this class to <Streamdown className=…>. */
 .claudebook-markdown {
-  --color-muted: var(--surface-secondary);
+  /* A framed panel: chrome one step off the page, code on a clean surface. */
+  [data-streamdown="code-block"] {
+    background-color: var(--surface-secondary);
+  }
+
+  [data-streamdown="code-block-body"] {
+    background-color: var(--surface);
+  }
+
+  [data-streamdown="inline-code"],
+  [data-streamdown="table-header"] {
+    background-color: var(--surface-tertiary);
+  }
 }

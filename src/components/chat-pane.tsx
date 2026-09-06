@@ -25,8 +25,8 @@ function Bubble({ role, children }: { role: "user" | "agent"; children: React.Re
 
 function Markdown({ text, isStreaming }: { text: string; isStreaming?: boolean }) {
   return (
-    // claudebook-markdown maps streamdown's shadcn token names onto HeroUI's.
-    // See globals.css.
+    // claudebook-markdown repaints the parts of streamdown's chrome whose
+    // shadcn token names land wrong on HeroUI. See globals.css.
     <Streamdown className="claudebook-markdown" isAnimating={isStreaming}>
       {text}
     </Streamdown>
@@ -153,8 +153,11 @@ export function ChatPane({
       </div>
 
       <div className="border-border bg-surface border-t px-6 py-4">
-        <div className="mx-auto flex max-w-2xl flex-col gap-2">
-          <TextField value={draft} onChange={setDraft} aria-label="Message">
+        <div className="flex flex-col gap-2">
+          {/* `secondary` because a field's default background is --surface, which
+              is exactly what this bar is painted with — the box vanishes into it.
+              No `fullWidth` needed: the column stretches the textarea already. */}
+          <TextField variant="secondary" value={draft} onChange={setDraft} aria-label="Message">
             <TextArea
               rows={2}
               placeholder="Ask about your sources…"
