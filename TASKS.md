@@ -105,23 +105,24 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` **blocked on a hu
 
 ## Phase 5 — domain services + API routes
 
-- [ ] `lib/firestore/notebooks.ts`, `lib/firestore/sources.ts` — typed repositories + converters
-- [ ] `NotebookService` — create provisions a session; delete archives it and deletes its Anthropic files
-- [ ] `SourceService` — multipart → `files.upload` → `resources.add` → Firestore index
-- [ ] `ArtifactService` — list via `scope_id` (retry once or twice; indexing lags idle), proxy downloads
-- [ ] `app/api/notebooks/route.ts` — GET list, POST create
-- [ ] `app/api/notebooks/[id]/route.ts` — GET, PATCH, DELETE
-- [ ] `app/api/notebooks/[id]/messages/route.ts` — POST `user.message`
-- [ ] `app/api/notebooks/[id]/interrupt/route.ts` — POST `user.interrupt`
-- [ ] `app/api/notebooks/[id]/events/route.ts` — transcript history for first paint
-- [ ] `app/api/notebooks/[id]/stream/route.ts` — SSE relay: `event_deltas: ['agent.message']`,
+- [x] `lib/firestore/notebooks.ts`, `lib/firestore/sources.ts` — typed repositories + converters
+- [x] `NotebookService` — create provisions a session; delete archives it and deletes its Anthropic files
+- [x] `SourceService` — multipart → `files.upload` → `resources.add` → Firestore index
+- [x] `ArtifactService` — list via `scope_id` (retry once or twice; indexing lags idle), proxy downloads
+- [x] `app/api/notebooks/route.ts` — GET list, POST create
+- [x] `app/api/notebooks/[id]/route.ts` — GET, PATCH, DELETE
+- [x] `app/api/notebooks/[id]/messages/route.ts` — POST `user.message`
+- [x] `app/api/notebooks/[id]/interrupt/route.ts` — POST `user.interrupt`
+- [x] `app/api/notebooks/[id]/events/route.ts` — transcript history for first paint
+- [x] `app/api/notebooks/[id]/stream/route.ts` — SSE relay: `event_deltas: ['agent.message']`,
       `Last-Event-ID` resume via `created_at[gt]`, **self-close at ~4 min**, `: ping` every 15s,
       headers `no-store, no-transform` + `X-Accel-Buffering: no`
-- [ ] `app/api/notebooks/[id]/sources/**` — GET list, POST upload, DELETE
-- [ ] `app/api/notebooks/[id]/artifacts/**` — GET list, GET download
-- [ ] Every handler opens with `requireUser()` **and** an ownership check — never trust a client `file_id`
+- [x] `app/api/notebooks/[id]/sources/**` — GET list, POST upload, DELETE
+- [x] `app/api/notebooks/[id]/artifacts/**` — GET list, GET download
+- [x] Every handler opens with `requireUser()` **and** an ownership check — never trust a client `file_id`
 - [ ] **Verify:** curl the full flow with a real cookie; confirm a second user gets 404 on the first
-      user's notebook
+      user's notebook. **Blocked on `gcloud auth application-default login`** — the Admin SDK has no
+      credentials on this machine, so no route that touches Firestore or mints a cookie can run.
 
 ## Phase 6 — UI
 
