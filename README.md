@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
+  <img src="docs/logo.svg" alt="" width="72" height="72">
+</picture>
+
 # Claudebook
 
 A private, invite-only NotebookLM clone. You create a notebook, drop your sources into it, and ask

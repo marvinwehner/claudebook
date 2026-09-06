@@ -1,5 +1,6 @@
 "use client";
 
+import { Moon, Sun } from "@gravity-ui/icons";
 import { Button } from "@heroui/react";
 import { useTheme } from "next-themes";
 import { useSyncExternalStore } from "react";
@@ -33,9 +34,15 @@ export function ThemeToggle() {
       onPress={() => setTheme(isDark ? "light" : "dark")}
     >
       {/* Reserve the space before mount so the nav does not jump. */}
-      <span aria-hidden className="text-base leading-none">
-        {mounted ? (isDark ? "☀" : "☾") : " "}
-      </span>
+      {mounted ? (
+        isDark ? (
+          <Sun aria-hidden />
+        ) : (
+          <Moon aria-hidden />
+        )
+      ) : (
+        <span aria-hidden className="size-4" />
+      )}
     </Button>
   );
 }

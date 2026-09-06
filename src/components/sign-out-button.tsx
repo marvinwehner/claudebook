@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowRightFromSquare } from "@gravity-ui/icons";
 import { Button } from "@heroui/react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -23,6 +24,7 @@ export function SignOutButton() {
 
   return (
     <Button size="sm" variant="ghost" isPending={busy} onPress={handleSignOut}>
+      <ArrowRightFromSquare aria-hidden />
       Sign out
     </Button>
   );

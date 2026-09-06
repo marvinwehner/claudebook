@@ -6,6 +6,7 @@ import { signInWithPopup, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { ClaudebookMark } from "@/components/claudebook-mark";
 import { clientAuth, googleProvider } from "@/lib/firebase/client";
 
 /** Popup, not redirect: `signInWithRedirect` needs a third-party-cookie iframe. */
@@ -76,6 +77,7 @@ export default function LoginPage() {
   return (
     <main className="grid min-h-dvh place-items-center p-6">
       <div className="w-full max-w-sm text-center">
+        <ClaudebookMark className="mx-auto mb-5 size-14" />
         <h1 className="text-2xl font-semibold tracking-tight">Claudebook</h1>
         <p className="text-muted mt-2 text-sm">
           A private notebook that reads your sources. Invite only.

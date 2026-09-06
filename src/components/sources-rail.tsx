@@ -1,5 +1,15 @@
 "use client";
 
+import {
+  ArrowUpFromLine,
+  File,
+  FileCode,
+  FileText,
+  Files,
+  Paperclip,
+  Picture,
+  Xmark,
+} from "@gravity-ui/icons";
 import { Button, Spinner } from "@heroui/react";
 import { useState } from "react";
 import { DropZone, FileTrigger } from "react-aria-components";
@@ -11,6 +21,14 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** A glyph per broad file family — enough to scan the list by shape, not a MIME taxonomy. */
+function sourceIcon(mimeType: string) {
+  if (mimeType.startsWith("image/")) return Picture;
+  if (mimeType === "application/json" || mimeType.startsWith("text/x-")) return FileCode;
+  if (mimeType.startsWith("text/") || mimeType === "application/pdf") return FileText;
+  return File;
 }
 
 /**
@@ -66,7 +84,10 @@ export function SourcesRail({
   return (
     <aside className="border-border bg-surface flex w-72 shrink-0 flex-col border-r">
       <div className="flex items-center justify-between px-4 py-3">
-        <h2 className="text-sm font-semibold">Sources</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <Files aria-hidden className="text-muted size-4" />
+          Sources
+        </h2>
         <span className="text-muted text-xs">{sources.length}</span>
       </div>
 
@@ -82,9 +103,11 @@ export function SourcesRail({
             void upload(files);
           }}
         >
+          <ArrowUpFromLine aria-hidden className="text-muted size-4" />
           <p className="text-muted text-xs">Drop files here</p>
           <FileTrigger allowsMultiple onSelect={(list) => void upload(list ? [...list] : [])}>
             <Button size="sm" variant="secondary" isPending={busy}>
+              <Paperclip aria-hidden />
               Choose files
             </Button>
           </FileTrigger>
@@ -111,29 +134,34 @@ export function SourcesRail({
           </li>
         ) : null}
 
-        {sources.map((source) => (
-          <li
-            key={source.id}
-            className="hover:bg-surface-secondary group flex items-start gap-2 rounded-md px-2 py-2"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-medium" title={source.filename}>
-                {source.filename}
-              </p>
-              <p className="text-muted text-[11px]">{formatSize(source.sizeBytes)}</p>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              isIconOnly
-              aria-label={`Remove ${source.filename}`}
-              className="opacity-0 group-hover:opacity-100"
-              onPress={() => void remove(source)}
+        {sources.map((source) => {
+          const Icon = sourceIcon(source.mimeType);
+
+          return (
+            <li
+              key={source.id}
+              className="hover:bg-surface-secondary group flex items-start gap-2 rounded-md px-2 py-2"
             >
-              <span aria-hidden>×</span>
-            </Button>
-          </li>
-        ))}
+              <Icon aria-hidden className="text-muted mt-0.5 size-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-medium" title={source.filename}>
+                  {source.filename}
+                </p>
+                <p className="text-muted text-[11px]">{formatSize(source.sizeBytes)}</p>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                isIconOnly
+                aria-label={`Remove ${source.filename}`}
+                className="opacity-0 group-hover:opacity-100"
+                onPress={() => void remove(source)}
+              >
+                <Xmark aria-hidden />
+              </Button>
+            </li>
+          );
+        })}
       </ul>
     </aside>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronRight } from "@gravity-ui/icons";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -10,6 +11,7 @@ import type { Notebook } from "@/lib/firestore/notebooks";
 import type { Source } from "@/lib/firestore/sources";
 import { ArtifactsRail } from "@/components/artifacts-rail";
 import { ChatPane } from "@/components/chat-pane";
+import { NotebookIcon } from "@/components/notebook-icon";
 import { NotebookSettings } from "@/components/notebook-settings";
 import { SourcesRail } from "@/components/sources-rail";
 import { useNotebookStream } from "@/components/use-notebook-stream";
@@ -58,10 +60,8 @@ export function NotebookWorkspace({
             <Link href="/" className="text-muted hover:text-foreground text-sm">
               Notebooks
             </Link>
-            <span className="text-muted" aria-hidden>
-              /
-            </span>
-            <span aria-hidden>{notebook.icon}</span>
+            <ChevronRight aria-hidden className="text-muted size-3.5 shrink-0" />
+            <NotebookIcon name={notebook.icon} className="text-accent size-4 shrink-0" />
             <h1 className="truncate text-sm font-medium">{notebook.title}</h1>
           </div>
 

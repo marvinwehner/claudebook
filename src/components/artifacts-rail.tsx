@@ -1,5 +1,6 @@
 "use client";
 
+import { ArrowDownToLine, Eye, FileText, Sparkles } from "@gravity-ui/icons";
 import { Button, Modal, Spinner, useOverlayState } from "@heroui/react";
 import { useState } from "react";
 import { Streamdown } from "streamdown";
@@ -41,7 +42,10 @@ export function ArtifactsRail({
   return (
     <aside className="border-border bg-surface flex w-72 shrink-0 flex-col border-l">
       <div className="flex items-center justify-between px-4 py-3">
-        <h2 className="text-sm font-semibold">Artifacts</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <Sparkles aria-hidden className="text-muted size-4" />
+          Artifacts
+        </h2>
         {loading ? (
           <Spinner size="sm" />
         ) : (
@@ -58,12 +62,14 @@ export function ArtifactsRail({
 
         {artifacts.map((artifact) => (
           <li key={artifact.fileId} className="hover:bg-surface-secondary rounded-md px-2 py-2">
-            <p className="truncate text-xs font-medium" title={artifact.filename}>
-              {artifact.filename}
+            <p className="flex items-center gap-2 text-xs font-medium" title={artifact.filename}>
+              <FileText aria-hidden className="text-muted size-4 shrink-0" />
+              <span className="truncate">{artifact.filename}</span>
             </p>
             <div className="mt-1 flex gap-1">
               {PREVIEWABLE.test(artifact.mimeType) ? (
                 <Button size="sm" variant="ghost" onPress={() => void open(artifact)}>
+                  <Eye aria-hidden />
                   Preview
                 </Button>
               ) : null}
@@ -72,8 +78,9 @@ export function ArtifactsRail({
               <a
                 href={api.artifactUrl(notebookId, artifact.fileId)}
                 download={artifact.filename}
-                className="text-accent px-2 py-1 text-xs hover:underline"
+                className="text-accent flex items-center gap-1.5 px-2 py-1 text-xs hover:underline"
               >
+                <ArrowDownToLine aria-hidden className="size-3.5" />
                 Download
               </a>
             </div>

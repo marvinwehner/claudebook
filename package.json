@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
+    "@gravity-ui/icons": "^2.22.0",
     "@heroui/react": "3.2.4",
     "@heroui/styles": "3.2.4",
     "firebase": "^12.18.0",

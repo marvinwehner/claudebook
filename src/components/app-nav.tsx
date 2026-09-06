@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ClaudebookMark } from "@/components/claudebook-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SignOutButton } from "@/components/sign-out-button";
 
@@ -11,7 +12,7 @@ export function AppNav({ email, children }: { email: string; children?: React.Re
   return (
     <header className="border-border bg-surface sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b px-4">
       <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-        <span aria-hidden>📓</span>
+        <ClaudebookMark className="size-5" />
         <span>Claudebook</span>
       </Link>
 

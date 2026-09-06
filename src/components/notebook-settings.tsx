@@ -1,5 +1,6 @@
 "use client";
 
+import { TrashBin } from "@gravity-ui/icons";
 import { AlertDialog, Button, ListBox, Select, useOverlayState } from "@heroui/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -88,6 +89,7 @@ export function NotebookSettings({
       </Select>
 
       <Button size="sm" variant="ghost" onPress={confirmDelete.open}>
+        <TrashBin aria-hidden />
         Delete
       </Button>
 

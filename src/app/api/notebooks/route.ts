@@ -3,12 +3,13 @@ import { z } from "zod";
 
 import { NOTEBOOK_MODELS } from "@/lib/anthropic/agent";
 import { requireUser } from "@/lib/auth/dal";
+import { NOTEBOOK_ICON_NAMES } from "@/lib/notebook-icons";
 import { toErrorResponse } from "@/lib/notebooks/errors";
 import { createNotebook, listNotebooks } from "@/lib/notebooks/notebook-service";
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
-  icon: z.string().max(8).optional(),
+  icon: z.enum(NOTEBOOK_ICON_NAMES).optional(),
   model: z.enum(NOTEBOOK_MODELS).optional(),
   customInstructions: z.string().max(20_000).optional(),
 });

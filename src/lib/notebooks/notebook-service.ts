@@ -7,6 +7,7 @@ import { deleteFile } from "@/lib/anthropic/files";
 import { archiveSession, ensureSession, type SessionSpec } from "@/lib/anthropic/sessions";
 import * as notebooks from "@/lib/firestore/notebooks";
 import * as sources from "@/lib/firestore/sources";
+import { DEFAULT_NOTEBOOK_ICON } from "@/lib/notebook-icons";
 import { NotFoundError, ValidationError } from "@/lib/notebooks/errors";
 
 export type Notebook = notebooks.Notebook;
@@ -48,7 +49,7 @@ export async function createNotebook(
   const notebook = await notebooks.createNotebook({
     ownerId,
     title,
-    icon: input.icon?.trim() || "📓",
+    icon: input.icon?.trim() || DEFAULT_NOTEBOOK_ICON,
     model,
     customInstructions: input.customInstructions?.trim() || undefined,
   });
@@ -151,7 +152,7 @@ export async function updateNotebook(
     patch.title = title;
   }
 
-  if (input.icon !== undefined) patch.icon = input.icon.trim() || "📓";
+  if (input.icon !== undefined) patch.icon = input.icon.trim() || DEFAULT_NOTEBOOK_ICON;
 
   if (input.customInstructions !== undefined) {
     patch.customInstructions = input.customInstructions.trim();

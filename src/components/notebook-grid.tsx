@@ -1,5 +1,6 @@
 "use client";
 
+import { BookOpen, Plus } from "@gravity-ui/icons";
 import {
   Button,
   Card,
@@ -20,6 +21,9 @@ import { useState } from "react";
 import { DEFAULT_MODEL, NOTEBOOK_MODELS, OPUS_MODEL } from "@/lib/anthropic/agent";
 import { api, ApiError } from "@/lib/api/client";
 import type { Notebook } from "@/lib/firestore/notebooks";
+import { DEFAULT_NOTEBOOK_ICON } from "@/lib/notebook-icons";
+import { IconPicker } from "@/components/icon-picker";
+import { NotebookIcon } from "@/components/notebook-icon";
 
 const MODEL_LABELS: Record<string, string> = {
   [DEFAULT_MODEL]: "Sonnet 5 — fast, the default",
@@ -39,7 +43,7 @@ export function NotebookGrid({ initialNotebooks }: { initialNotebooks: Notebook[
   const state = useOverlayState();
 
   const [title, setTitle] = useState("");
-  const [icon, setIcon] = useState("📓");
+  const [icon, setIcon] = useState<string>(DEFAULT_NOTEBOOK_ICON);
   const [model, setModel] = useState<string>(DEFAULT_MODEL);
   const [instructions, setInstructions] = useState("");
   const [busy, setBusy] = useState(false);
@@ -78,6 +82,7 @@ export function NotebookGrid({ initialNotebooks }: { initialNotebooks: Notebook[
 
         <Modal state={state}>
           <Button variant="primary" onPress={state.open}>
+            <Plus aria-hidden />
             New notebook
           </Button>
 
@@ -90,10 +95,7 @@ export function NotebookGrid({ initialNotebooks }: { initialNotebooks: Notebook[
 
                 <Modal.Body className="flex flex-col gap-4">
                   <div className="flex gap-3">
-                    <TextField className="w-24 shrink-0" value={icon} onChange={setIcon}>
-                      <Label>Icon</Label>
-                      <Input maxLength={4} />
-                    </TextField>
+                    <IconPicker value={icon} onChange={setIcon} />
 
                     <TextField className="flex-1" value={title} onChange={setTitle} isRequired>
                       <Label>Title</Label>
@@ -158,6 +160,9 @@ export function NotebookGrid({ initialNotebooks }: { initialNotebooks: Notebook[
 
       {initialNotebooks.length === 0 ? (
         <Card className="border-border border border-dashed p-10 text-center">
+          <div className="bg-surface-secondary text-muted mx-auto mb-3 flex size-11 items-center justify-center rounded-2xl">
+            <BookOpen aria-hidden className="size-5" />
+          </div>
           <p className="font-medium">Start your first notebook</p>
           <p className="text-muted mx-auto mt-1 max-w-sm text-sm">
             Upload sources, then ask questions the assistant answers from them and cites.
@@ -169,8 +174,8 @@ export function NotebookGrid({ initialNotebooks }: { initialNotebooks: Notebook[
             <li key={notebook.id}>
               <Link href={`/notebooks/${notebook.id}`} className="block h-full">
                 <Card className="hover:border-accent h-full p-5 transition-colors">
-                  <div className="text-2xl" aria-hidden>
-                    {notebook.icon}
+                  <div className="bg-accent-soft text-accent-soft-foreground flex size-10 items-center justify-center rounded-2xl">
+                    <NotebookIcon name={notebook.icon} className="size-5" />
                   </div>
                   <p className="mt-3 line-clamp-2 font-medium">{notebook.title}</p>
                   <p className="text-muted mt-1 text-xs">

@@ -1,5 +1,6 @@
 "use client";
 
+import { Comments, PaperPlane, Stop, TriangleExclamation } from "@gravity-ui/icons";
 import { Button, Spinner, TextArea, TextField } from "@heroui/react";
 import { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
@@ -118,7 +119,8 @@ export function ChatPane({
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-5">
           {messages.length === 0 && !previewText ? (
-            <div className="text-muted py-16 text-center text-sm">
+            <div className="text-muted flex flex-col items-center gap-3 py-16 text-center text-sm">
+              <Comments aria-hidden className="size-6 opacity-60" />
               {hasSources
                 ? "Ask a question about your sources."
                 : "Add a source on the left, then ask a question about it."}
@@ -140,7 +142,8 @@ export function ChatPane({
           <Activity stream={stream} />
 
           {errors.map((event) => (
-            <p key={event.id} role="alert" className="text-danger text-xs">
+            <p key={event.id} role="alert" className="text-danger flex items-center gap-2 text-xs">
+              <TriangleExclamation aria-hidden className="size-4 shrink-0" />
               {event.message}
             </p>
           ))}
@@ -179,6 +182,7 @@ export function ChatPane({
                   variant="tertiary"
                   onPress={() => void api.interrupt(notebookId).catch(() => {})}
                 >
+                  <Stop aria-hidden />
                   Stop
                 </Button>
               ) : null}
@@ -189,6 +193,7 @@ export function ChatPane({
                 isPending={sending}
                 onPress={send}
               >
+                <PaperPlane aria-hidden />
                 Send
               </Button>
             </div>

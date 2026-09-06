@@ -9,6 +9,7 @@ import {
 
 import type { NotebookModel } from "@/lib/anthropic/agent";
 import { adminDb } from "@/lib/firebase/admin";
+import { DEFAULT_NOTEBOOK_ICON } from "@/lib/notebook-icons";
 
 /**
  * The ownership record for a notebook.
@@ -51,7 +52,7 @@ function fromSnapshot(snapshot: QueryDocumentSnapshot<DocumentData>): Notebook {
     id: snapshot.id,
     ownerId: data.ownerId,
     title: data.title,
-    icon: data.icon ?? "📓",
+    icon: data.icon ?? DEFAULT_NOTEBOOK_ICON,
     model: data.model,
     customInstructions: data.customInstructions || undefined,
     sessionId: data.sessionId ?? null,
