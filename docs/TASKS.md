@@ -613,7 +613,7 @@ the redirect. Commit attribution was unaffected: every commit is authored as a r
       before the rename each produced a rollout 7–30s after the commit (`rollout-2026-09-07-001`
       through `-005`); the first commit after it produced nothing in ~8 minutes. A **manual**
       `apphosting:rollouts:create --git-commit` still worked and printed the commit message, so the
-      Developer Connect link could still *read* the repo — only the webhook match was stale.
+      Developer Connect link could still _read_ the repo — only the webhook match was stale.
 - [x] **`AGENTS.md` was wrong that the repo link cannot be changed after create.** That is true of
       the `firebase` CLI, which has no `backends:update`. The underlying REST API does support it:
       `PATCH .../backends/claudebook?updateMask=codebase.repository` is accepted and returns a normal

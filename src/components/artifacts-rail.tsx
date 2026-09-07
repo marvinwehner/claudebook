@@ -148,7 +148,7 @@ export function ArtifactsRail({
       <Modal state={state}>
         <Modal.Backdrop>
           <Modal.Container size="lg" scroll="inside">
-            <Modal.Dialog>
+            <Modal.Dialog className="md:max-w-[70vw]">
               <Modal.Header>
                 <Modal.Heading>{preview?.artifact.filename ?? "Artifact"}</Modal.Heading>
               </Modal.Header>

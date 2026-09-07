@@ -13,5 +13,4 @@ export const SITE_NAME = "Claudebook";
 /** Verbatim from `src/app/login/page.tsx`, so the card and the page agree. */
 export const SITE_DESCRIPTION = "A private notebook that reads your sources. Invite only.";
 
-
 export const REPO_URL = "https://github.com/marvinwehner/claudebook";
