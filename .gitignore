@@ -42,3 +42,6 @@ firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
 .verify/
+
+# claude code local settings
+.claude/settings.local.json
