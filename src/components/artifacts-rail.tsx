@@ -10,7 +10,15 @@ import {
   LogoAcrobat,
   Sparkles,
 } from "@gravity-ui/icons";
-import { Button, Modal, Spinner, useOverlayState } from "@heroui/react";
+import {
+  Button,
+  buttonVariants,
+  Link,
+  Modal,
+  Spinner,
+  Tooltip,
+  useOverlayState,
+} from "@heroui/react";
 import { useState } from "react";
 import { Streamdown } from "streamdown";
 
@@ -68,7 +76,7 @@ export function ArtifactsRail({
   }
 
   return (
-    <aside className="border-border bg-surface flex w-72 shrink-0 flex-col border-l">
+    <aside className="bg-surface shadow-surface flex w-72 shrink-0 flex-col overflow-hidden rounded-2xl">
       <div className="flex items-center justify-between px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Sparkles aria-hidden className="text-muted size-4" />
@@ -92,29 +100,46 @@ export function ArtifactsRail({
           const Icon = artifactIcon(artifact.filename);
 
           return (
-            <li key={artifact.fileId} className="hover:bg-surface-secondary rounded-md px-2 py-2">
-              <p className="flex items-center gap-2 text-xs font-medium" title={artifact.filename}>
-                <Icon aria-hidden className="text-muted size-4 shrink-0" />
-                <span className="truncate">{artifact.filename}</span>
+            <li
+              key={artifact.fileId}
+              className="hover:bg-surface-secondary flex items-center gap-2 rounded-md px-2 py-1.5"
+            >
+              <Icon aria-hidden className="text-muted size-4 shrink-0" />
+              <p className="min-w-0 flex-1 truncate text-xs font-medium" title={artifact.filename}>
+                {artifact.filename}
               </p>
-              <div className="mt-1 flex gap-1">
-                {PREVIEWABLE.test(artifact.mimeType) ? (
-                  <Button size="sm" variant="ghost" onPress={() => void open(artifact)}>
+
+              {PREVIEWABLE.test(artifact.mimeType) ? (
+                <Tooltip>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    aria-label={`Preview ${artifact.filename}`}
+                    onPress={() => void open(artifact)}
+                  >
                     <Eye aria-hidden />
-                    Preview
                   </Button>
-                ) : null}
-                {/* A plain link, so the browser's own download handling applies —
-                  the route sets Content-Disposition. */}
-                <a
+                  <Tooltip.Content>Preview</Tooltip.Content>
+                </Tooltip>
+              ) : null}
+
+              {/* Still an anchor, so the browser's own download handling applies —
+                  the route sets Content-Disposition. React Aria skips client
+                  routing for any link carrying `download`, so `Link` keeps that.
+                  It wears the button's shape through `buttonVariants`, which is
+                  what link.css's `.link.button` rule exists for. */}
+              <Tooltip>
+                <Link
                   href={api.artifactUrl(notebookId, artifact.fileId)}
                   download={artifact.filename}
-                  className="text-accent flex items-center gap-1.5 px-2 py-1 text-xs hover:underline"
+                  aria-label={`Download ${artifact.filename}`}
+                  className={buttonVariants({ isIconOnly: true, size: "sm", variant: "ghost" })}
                 >
-                  <ArrowDownToLine aria-hidden className="size-3.5" />
-                  Download
-                </a>
-              </div>
+                  <ArrowDownToLine aria-hidden />
+                </Link>
+                <Tooltip.Content>Download</Tooltip.Content>
+              </Tooltip>
             </li>
           );
         })}

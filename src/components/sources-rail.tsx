@@ -82,7 +82,7 @@ export function SourcesRail({
   }
 
   return (
-    <aside className="border-border bg-surface flex w-72 shrink-0 flex-col border-r">
+    <aside className="bg-surface shadow-surface flex w-72 shrink-0 flex-col overflow-hidden rounded-2xl">
       <div className="flex items-center justify-between px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Files aria-hidden className="text-muted size-4" />

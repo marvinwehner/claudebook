@@ -53,34 +53,35 @@ export function NotebookWorkspace({
   useEffect(refreshArtifacts, [refreshArtifacts]);
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <SourcesRail notebookId={notebook.id} sources={sources} onChange={setSources} />
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="border-border flex h-12 shrink-0 items-center justify-between gap-3 border-b px-6">
-          <div className="flex min-w-0 items-center gap-2">
-            <Link href="/" className="text-muted hover:text-foreground text-sm">
-              Notebooks
-            </Link>
-            <ChevronRight aria-hidden className="text-muted size-3.5 shrink-0" />
-            <NotebookIcon name={notebook.icon} className="text-accent size-4 shrink-0" />
-            <h1 className="truncate text-sm font-medium">{notebook.title}</h1>
-          </div>
-
-          <NotebookSettings
-            notebook={notebook}
-            onConversationReset={() => {
-              // The old session is archived; its transcript and its artifacts
-              // are gone. Reloading is the honest way to show that.
-              window.location.reload();
-            }}
-          />
+    // The three panes float as cards on the page background rather than filling
+    // it: the gap between them *is* the separator, so none of them carries a
+    // divider of its own.
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-3 pb-3">
+      <div className="flex shrink-0 items-center justify-between gap-3 px-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link href="/" className="text-muted hover:text-foreground text-sm">
+            Notebooks
+          </Link>
+          <ChevronRight aria-hidden className="text-muted size-3.5 shrink-0" />
+          <NotebookIcon name={notebook.icon} className="text-accent size-4 shrink-0" />
+          <h1 className="truncate text-sm font-medium">{notebook.title}</h1>
         </div>
 
-        <ChatPane notebookId={notebook.id} stream={stream} hasSources={sources.length > 0} />
+        <NotebookSettings
+          notebook={notebook}
+          onConversationReset={() => {
+            // The old session is archived; its transcript and its artifacts
+            // are gone. Reloading is the honest way to show that.
+            window.location.reload();
+          }}
+        />
       </div>
 
-      <ArtifactsRail notebookId={notebook.id} artifacts={artifacts} loading={loadingArtifacts} />
+      <div className="flex min-h-0 flex-1 gap-3">
+        <SourcesRail notebookId={notebook.id} sources={sources} onChange={setSources} />
+        <ChatPane notebookId={notebook.id} stream={stream} hasSources={sources.length > 0} />
+        <ArtifactsRail notebookId={notebook.id} artifacts={artifacts} loading={loadingArtifacts} />
+      </div>
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { SignOutButton } from "@/components/sign-out-button";
  */
 export function AppNav({ email, children }: { email: string; children?: React.ReactNode }) {
   return (
-    <header className="border-border bg-surface sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b px-4">
+    <header className="bg-background sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 px-4">
       <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
         <ClaudebookMark className="size-5" />
         <span>Claudebook</span>

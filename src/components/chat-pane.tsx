@@ -119,8 +119,15 @@ export function ChatPane({
   );
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+    <section className="bg-surface shadow-surface flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl">
+      <div className="flex shrink-0 items-center px-4 py-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <Comments aria-hidden className="text-muted size-4" />
+          Chat
+        </h2>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
         <div className="mx-auto flex max-w-2xl flex-col gap-5">
           {messages.length === 0 && !previewText ? (
             <div className="text-muted flex flex-col items-center gap-3 py-16 text-center text-sm">
@@ -156,11 +163,11 @@ export function ChatPane({
         </div>
       </div>
 
-      <div className="border-border bg-surface border-t px-6 py-4">
+      <div className="px-6 pt-2 pb-4">
         <div className="flex flex-col gap-2">
           {/* `secondary` because a field's default background is --surface, which
-              is exactly what this bar is painted with — the box vanishes into it.
-              No `fullWidth` needed: the column stretches the textarea already. */}
+              is exactly what the card behind it is painted with — the box vanishes
+              into it. No `fullWidth` needed: the column stretches the textarea. */}
           <TextField
             variant="secondary"
             value={draft}
