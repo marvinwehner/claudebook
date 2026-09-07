@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import type { UiEvent } from "@/lib/anthropic/events";
+import type { StreamEvent, UiEvent } from "@/lib/anthropic/events";
+import type { Artifact } from "@/lib/anthropic/files";
 
 export interface ToolActivity {
   toolUseId: string;
@@ -31,7 +32,7 @@ export interface StreamState {
 export function useNotebookStream(
   notebookId: string,
   initialEvents: UiEvent[],
-  onTurnComplete?: () => void,
+  onArtifacts?: (artifacts: Artifact[]) => void,
   initialCursor?: string | null,
 ): StreamState {
   const [events, setEvents] = useState<UiEvent[]>(initialEvents);
@@ -46,7 +47,7 @@ export function useNotebookStream(
   const [seen] = useState(() => new Set(initialEvents.map((event) => event.id)));
 
   const handle = useCallback(
-    (event: UiEvent) => {
+    (event: StreamEvent) => {
       switch (event.kind) {
         case "delta":
           // Best-effort: deltas can be shed under load, so this is only ever a
@@ -103,8 +104,11 @@ export function useNotebookStream(
           if (event.status === "idle") {
             setThinking(false);
             setActiveTools([]);
-            if (event.stopReason !== "requires_action") onTurnComplete?.();
           }
+          return;
+
+        case "artifacts":
+          onArtifacts?.(event.artifacts);
           return;
 
         case "usage":
@@ -116,9 +120,9 @@ export function useNotebookStream(
       seen.add(event.id);
       setEvents((current) => [...current, event]);
     },
-    // onTurnComplete comes from a useCallback in the caller, so this is stable
+    // onArtifacts comes from a useCallback in the caller, so this is stable
     // and the subscription below is not torn down on every render.
-    [seen, onTurnComplete],
+    [seen, onArtifacts],
   );
 
   useEffect(() => {
@@ -137,13 +141,22 @@ export function useNotebookStream(
 
     const onMessage = (message: MessageEvent<string>) => {
       try {
-        handle(JSON.parse(message.data) as UiEvent);
+        handle(JSON.parse(message.data) as StreamEvent);
       } catch {
         // A truncated frame is not worth tearing the stream down for.
       }
     };
 
-    for (const kind of ["message", "delta", "thinking", "tool", "status", "usage", "error"]) {
+    for (const kind of [
+      "message",
+      "delta",
+      "thinking",
+      "tool",
+      "status",
+      "usage",
+      "error",
+      "artifacts",
+    ]) {
       source.addEventListener(kind, onMessage as EventListener);
     }
 

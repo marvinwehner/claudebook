@@ -2,7 +2,15 @@ import type { Anthropic } from "@anthropic-ai/sdk";
 import type { Stream } from "@anthropic-ai/sdk/core/streaming";
 
 import { anthropic } from "@/lib/anthropic/client";
-import { decodeCursor, encodeCursor, normalizeEvent, type UiEvent } from "@/lib/anthropic/events";
+import {
+  decodeCursor,
+  encodeCursor,
+  isTurnComplete,
+  normalizeEvent,
+  type StreamEvent,
+  type UiEvent,
+} from "@/lib/anthropic/events";
+import { listArtifacts } from "@/lib/anthropic/files";
 import { requireUser } from "@/lib/auth/dal";
 import { ConflictError, toErrorResponse } from "@/lib/notebooks/errors";
 import { liveSession, requireNotebook } from "@/lib/notebooks/notebook-service";
@@ -37,11 +45,18 @@ const SELF_CLOSE_MS = 4 * 60 * 1000;
 const HEARTBEAT_MS = 15 * 1000;
 
 /**
+ * Anthropic indexes `/mnt/session/outputs` a second or two *after* the session
+ * goes idle, so one list at that moment can miss the file the turn just wrote.
+ * Sample across the lag instead, and push whenever the set changes.
+ */
+const ARTIFACT_SWEEP_MS = [0, 1500, 3000];
+
+/**
  * `id:` is omitted for an event with no `processed_at`, because there is no
  * timestamp to resume from. Per the SSE spec the browser then keeps the last id
  * it saw, so an unresumable cursor can never displace a usable one.
  */
-function frame(event: UiEvent, cursor: string | null): string {
+function frame(event: StreamEvent, cursor: string | null): string {
   return `${cursor ? `id: ${cursor}\n` : ""}event: ${event.kind}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
@@ -105,6 +120,42 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
         );
       };
 
+      let lastArtifacts: string | null = null;
+      let sweepToken = 0;
+
+      // Fire-and-forget: awaiting this in the event loop below would stall
+      // forwarding for the width of the sweep.
+      async function sweepArtifacts() {
+        const token = ++sweepToken;
+
+        for (const delay of ARTIFACT_SWEEP_MS) {
+          if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+          if (closed || token !== sweepToken) return;
+
+          // Each sample is single-shot; the sweep is what does the retrying. A
+          // failed sample is not worth killing the relay for — the rail keeps
+          // whatever it has and the next turn sweeps again.
+          try {
+            const artifacts = await listArtifacts(sessionId, 0);
+
+            // Re-check: a newer sweep may have overtaken this one while the
+            // list was in flight, and its result is the fresher of the two.
+            if (closed || token !== sweepToken) return;
+
+            const fingerprint = artifacts
+              .map((artifact) => artifact.fileId)
+              .sort()
+              .join();
+
+            if (fingerprint === lastArtifacts) continue;
+            lastArtifacts = fingerprint;
+            send(frame({ kind: "artifacts", artifacts }, null));
+          } catch (error) {
+            console.error("Artifact sweep failed:", error);
+          }
+        }
+      }
+
       // Intermediaries drop connections that go quiet; a comment frame is the
       // cheapest thing that counts as traffic.
       const heartbeat = setInterval(() => send(": ping\n\n"), HEARTBEAT_MS);
@@ -142,13 +193,21 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
           // `created_at[gt]` filters on, and `order` sorts by, the event's
           // `processed_at`. The `seen` set is what makes the seam exact.
           seen.add(cursor.eventId);
+          let replayedTurnEnd = false;
+
           for await (const raw of anthropic().beta.sessions.events.list(sessionId, {
             "created_at[gt]": cursor.timestamp,
             order: "asc",
           })) {
             if (closed) break;
-            emit(raw, normalizeEvent(raw));
+            const event = normalizeEvent(raw);
+            emit(raw, event);
+            if (event && isTurnComplete(event)) replayedTurnEnd = true;
           }
+
+          // A turn that ended while we were disconnected is only ever seen
+          // here, so without this its artifacts wait for the next turn.
+          if (replayedTurnEnd) void sweepArtifacts();
         }
 
         for await (const raw of stream) {
@@ -163,7 +222,10 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
             continue;
           }
 
-          emit(raw, normalizeEvent(raw));
+          const event = normalizeEvent(raw);
+          emit(raw, event);
+
+          if (event && isTurnComplete(event)) void sweepArtifacts();
         }
       } catch (error) {
         if (!closed) {

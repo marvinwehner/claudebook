@@ -2,7 +2,7 @@
 
 import { ChevronRight } from "@gravity-ui/icons";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { UiEvent } from "@/lib/anthropic/events";
 import type { Artifact } from "@/lib/anthropic/files";
@@ -35,22 +35,36 @@ export function NotebookWorkspace({
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [loadingArtifacts, setLoadingArtifacts] = useState(true);
 
-  // No synchronous setState here: `loadingArtifacts` starts true and every
-  // update happens in a promise callback, so the effect below does not cascade
-  // a render. A refresh after a turn should not flash a spinner anyway.
-  const refreshArtifacts = useCallback(() => {
+  const pushed = useRef(false);
+
+  const showArtifacts = useCallback((next: Artifact[]) => {
+    pushed.current = true;
+    setArtifacts(next);
+    setLoadingArtifacts(false);
+  }, []);
+
+  // The relay re-lists and pushes after every turn, so this is only the first
+  // paint — artifacts are listed live rather than mirrored, and the page render
+  // does not carry them.
+  const stream = useNotebookStream(notebook.id, initialEvents, showArtifacts, initialCursor);
+
+  useEffect(() => {
+    let cancelled = false;
     api
       .listArtifacts(notebook.id)
-      .then((result) => setArtifacts(result.artifacts))
+      .then((result) => {
+        // This list is slow enough that a turn can end while it is in flight,
+        // and what the relay pushed is then newer than what it returns.
+        if (!cancelled && !pushed.current) setArtifacts(result.artifacts);
+      })
       .catch(() => {})
-      .finally(() => setLoadingArtifacts(false));
+      .finally(() => {
+        if (!cancelled) setLoadingArtifacts(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [notebook.id]);
-
-  // Artifacts are listed live rather than mirrored, so the only way to notice a
-  // new one is to re-list when the agent stops working.
-  const stream = useNotebookStream(notebook.id, initialEvents, refreshArtifacts, initialCursor);
-
-  useEffect(refreshArtifacts, [refreshArtifacts]);
 
   return (
     // The three panes float as cards on the page background rather than filling

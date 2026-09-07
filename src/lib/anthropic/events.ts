@@ -1,5 +1,7 @@
 import type { Anthropic } from "@anthropic-ai/sdk";
 
+import type { Artifact } from "@/lib/anthropic/files";
+
 /**
  * Anthropic session events → the small set of things the UI actually renders,
  * plus the SSE cursor codec.
@@ -46,6 +48,15 @@ export type UiEvent =
       outputTokens: number;
     }
   | { kind: "error"; id: string; at: string; message: string };
+
+/**
+ * Synthesised by the relay after a turn rather than normalised from an Anthropic
+ * event, so it carries no id and never enters the transcript.
+ */
+export type ArtifactsEvent = { kind: "artifacts"; artifacts: Artifact[] };
+
+/** Everything the SSE relay sends: the transcript events plus the synthesised one. */
+export type StreamEvent = UiEvent | ArtifactsEvent;
 
 function textOf(content: Array<{ type: string; text?: string }>): string {
   return content

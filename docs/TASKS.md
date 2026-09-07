@@ -331,6 +331,44 @@ Still open and deliberately not changed: the sandbox's `networking: unrestricted
 bash and web_fetch over untrusted sources is an exfiltration path. That is a settled PLAN.md
 decision, so it needs a call rather than a quiet edit.
 
+## Artifact rail went stale after the first artifact
+
+- [x] **`listArtifacts` retried on emptiness, not on change.** The retry exists to absorb the
+      ~1-3s indexing lag after `session.status_idle`, but the gate was `artifacts.length > 0`.
+      A notebook's _first_ artifact appeared (empty list -> retry ran); every one after it did
+      not, because the already-indexed files satisfied the gate on the first attempt and the
+      stale list returned instantly. The rail asked once per turn, so that answer was final
+      until a reload — and a reload only worked because the page never server-renders
+      artifacts, so it just re-ran the same fetch later.
+- [x] **The relay now owns the lag.** On a non-`requires_action` `session.status_idle` the
+      stream route sweeps `listArtifacts(sessionId, 0)` at 0/1.5/3s and pushes an `artifacts`
+      frame whenever the file-id set changes. Fire-and-forget, or it stalls event forwarding
+      for the width of the sweep. The frame carries **no `id:`** — a synthesised event has no
+      `processed_at` and must never displace the `Last-Event-ID` cursor.
+- [x] `UiEvent` stayed the transcript union (every member has an `id`, which
+      `use-notebook-stream` relies on when seeding `seen`). The synthesised event is a separate
+      `ArtifactsEvent`, and `StreamEvent = UiEvent | ArtifactsEvent` is what the relay sends.
+      The compiler caught this — the first attempt put it in `UiEvent` and broke that seed.
+- [x] The client no longer polls: `onTurnComplete` became `onArtifacts`, and the workspace
+      keeps one mount fetch for first paint. Adding the kind to the `addEventListener` list is
+      easy to miss — without it the frame arrives and nothing fires.
+- [x] **Verified in the browser** on the notebook that reproduced it, which already held a
+      `.pptx` and a `.md`: asked for a new `.md`, the rail went 2 -> 3 with no reload, and the
+      dev log shows **zero** `/artifacts` requests after the `POST /messages` — it arrived over
+      the stream.
+
+### Not changed, deliberately
+
+- `files.ts:128` keeps its retry-until-non-empty. It is correct for the cold-start HTTP path,
+  and `verify-flow.ts:122` depends on it. The defect was that the _turn-end_ refresh used it.
+- No mid-turn trigger off `agent.tool_use`. It fires when the tool is invoked, which is earlier
+  than the lag window, and the pptx skill writes via pptxgenjs under bash — no `input.file_path`
+  to sniff. `normalizeEvent` still drops `input`.
+- A turn that ends while the client is disconnected reaches the relay only through the cursor
+  replay, which forwards events but ran no sweep — so the rail stayed stale even with a perfectly
+  good cursor, not just the null-cursor case this note first claimed. The replay loop now sweeps
+  too, and both call sites use `isTurnComplete` rather than re-inlining the predicate.
+
 ---
 
 ## Deferred (explicitly out of scope for v1)
