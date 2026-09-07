@@ -526,6 +526,80 @@ admin manages from the account menu in the header. `ALLOWED_DOMAINS` is gone ent
 
 ---
 
+## Streaming chat showed only the newest fragment
+
+Reported from real use: while the agent answers, the chat showed one scrap of text that kept being
+replaced, and the full answer appeared only once the turn ended.
+
+- **`event_delta.delta.index` is the index of an entry in the previewed event's content array, not a
+  sequence number.** Every fragment of one text block carries the same index, so the buffer has to
+  append; `use-notebook-stream` was assigning, which kept only the newest fragment until the
+  buffered `agent.message` replaced the preview wholesale. The SDK's own
+  `accumulateManagedAgentsEvent` is the authority: same index → `existing.text + fragment.text`.
+- **This contradicted PLAN.md, which had it right all along** — "accumulate them into a scratch
+  buffer keyed by event id". The comment that justified assigning claimed a resume replays deltas
+  and would double-count. It does not: deltas carry no cursor and "never appear in event history",
+  so the replay lists persisted events only. A wrong comment outlived the plan it contradicted;
+  `applyDelta` is now an exported pure function with a test, so the semantics cannot flip silently
+  again.
+- **Appending turned two latent preview-lifecycle gaps into visible corruption**, both fixed here:
+  the relay opens the upstream stream _before_ replaying history, so a message that completes in
+  that window is rendered from the replay while its deltas are still queued — the client now drops
+  deltas for an id already in `seen`, rather than rebuilding the tail as a phantom bubble no later
+  event can clear. And `session.status_rescheduled` now clears previews too: a model request that
+  ends early produces no buffered message at all, so its abandoned preview was being concatenated in
+  front of the retry's answer.
+
+### Two pre-existing bugs the same review surfaced, also fixed
+
+- **`rescheduling` read as not-running.** A rescheduled session is recovering and queued to resume,
+  but `setRunning(event.status === "running")` emptied the activity indicator, so a recovering
+  agent looked dead and invited a re-send. It now counts as running.
+- **The relay never requested `agent.thinking` previews.** `event_deltas` listed only
+  `agent.message`, and the SDK is explicit that "only previews of the requested event types are
+  sent" — so the `event_start` → thinking arm in `normalizeEvent` was unreachable in production
+  (`events.test.ts:77` passed on a path that never ran) and "Thinking…" could only appear _after_
+  thinking had finished. Both types are requested now.
+
+---
+
+## Link previews (Open Graph / Twitter Cards)
+
+Sharing any Claudebook URL produced a text-only preview: the root layout exported `title` and
+`description` and nothing else. Added `metadataBase`, an `openGraph` block, `twitter.card`, a
+generated `opengraph-image` and a `robots.ts`.
+
+- [x] `src/lib/config/site.ts` — `SITE_URL` / `SITE_NAME` / `SITE_DESCRIPTION` as plain constants.
+      Not env vars: the origin is fixed by the backend name and region, and a `NEXT_PUBLIC_*` would
+      need syncing across `.env.local.example`, both `apphosting*.yaml`, `ci.yml` and `env.ts`.
+- [x] `src/app/opengraph-image.tsx` — 1200x630, built with `ImageResponse`. Prerendered static, 38 KB.
+- [x] `src/app/robots.ts`, and `robots: { index: false, follow: true }` in the root layout.
+
+### Three things that only turned up by reading the installed source
+
+- **A missing `metadataBase` fails silently, it does not error.** The docs say a relative URL without
+  one is a build error, but for a _static metadata route file_ like `opengraph-image`,
+  `resolvers/resolve-opengraph.js` only `warnOnce`s and falls back to `localhost:3000`. Production
+  would have shipped `og:image="http://localhost:3000/..."` and lost the image on every platform.
+- **`robots.txt` must not `Disallow`.** Twitterbot and facebookexternalhit both honour it, so the
+  obvious "it's invite-only, block everything" would have broken the previews it was meant to
+  accompany. The `noindex` meta tag is what hides the site; robots.txt stays permissive.
+- **`next/og` bundles exactly one font** — `Geist-Regular.ttf`, weight 400. There is no bold, so the
+  card's hierarchy is size and colour only. `ImageResponse` also hardcodes `content-type: image/png`
+  with no JPEG option, which is why the art is flat-coloured: it keeps the PNG under WhatsApp's
+  ~300 KB ceiling and Slack's ~1 MB proxy limit.
+
+### Not changed, deliberately
+
+- **No `generateMetadata` on `notebooks/[id]`.** A notebook title in an OG tag would leak exactly what
+  the 404-not-403 rule exists to hide. Notebook pages inherit the generic site card.
+- **`/` still redirects crawlers to `/login`.** Verified with `curl -sL -A "WhatsApp/2.23.20.0 A"`:
+  the 307 is followed and `/login` returns 200 with the tags, which it inherits from the root layout.
+  A public 200 shell at `/` would remove the dependency on redirect-following, but it is a change to
+  the auth gate and was not needed.
+
+---
+
 ## Deferred (explicitly out of scope for v1)
 
 - Source viewer / re-download of uploaded sources (Anthropic returns `downloadable: false` for uploads;

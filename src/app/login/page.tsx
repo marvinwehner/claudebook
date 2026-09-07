@@ -1,6 +1,7 @@
 "use client";
 
-import { Button } from "@heroui/react";
+import { LogoGithub } from "@gravity-ui/icons";
+import { Button, Link } from "@heroui/react";
 import { FirebaseError } from "firebase/app";
 import { signInWithPopup, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -8,6 +9,7 @@ import { useState } from "react";
 
 import { ClaudebookMark } from "@/components/claudebook-mark";
 import { clientAuth, googleProvider } from "@/lib/firebase/client";
+import { REPO_URL } from "@/lib/config/site";
 
 /** Popup, not redirect: `signInWithRedirect` needs a third-party-cookie iframe. */
 function messageForFirebaseError(error: FirebaseError): string | null {
@@ -77,24 +79,40 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-dvh place-items-center p-6">
-      <div className="w-full max-w-sm text-center">
-        <ClaudebookMark className="mx-auto mb-5 size-14" />
-        <h1 className="text-2xl font-semibold tracking-tight">Claudebook</h1>
-        <p className="text-muted mt-2 text-sm">
-          A private notebook that reads your sources. Invite only.
-        </p>
-
-        <Button className="mt-8 w-full" variant="primary" isPending={busy} onPress={signIn}>
-          Continue with Google
-        </Button>
-
-        {error ? (
-          <p role="alert" className="text-danger mt-4 text-sm">
-            {error}
+    <div className="flex min-h-dvh flex-col">
+      <main className="grid flex-1 place-items-center p-6">
+        <div className="w-full max-w-sm text-center">
+          <ClaudebookMark className="mx-auto mb-5 size-14" />
+          <h1 className="text-2xl font-semibold tracking-tight">Claudebook</h1>
+          <p className="text-muted mt-2 text-sm">
+            A private notebook that reads your sources. Invite only.
           </p>
-        ) : null}
-      </div>
-    </main>
+
+          <Button className="mt-8 w-full" variant="primary" isPending={busy} onPress={signIn}>
+            Continue with Google
+          </Button>
+
+          {error ? (
+            <p role="alert" className="text-danger mt-4 text-sm">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      </main>
+
+      <footer className="text-muted flex items-center justify-center gap-2 p-6 text-xs">
+        <span>© 2026 Claudebook</span>
+        <span aria-hidden>·</span>
+        <Link
+          href={REPO_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-muted hover:text-foreground gap-1.5 text-xs"
+        >
+          <LogoGithub aria-hidden className="size-4" />
+          Source
+        </Link>
+      </footer>
+    </div>
   );
 }

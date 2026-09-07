@@ -237,8 +237,12 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
         // Open the stream BEFORE replaying history. The stream carries only
         // what happens after it connects, so opening second would leave a hole
         // exactly the width of the history fetch.
+        //
+        // Only previews of the requested types are sent, so agent.thinking has
+        // to be asked for: without it the thinking signal arrives as the
+        // buffered event, once thinking is already over.
         stream = await anthropic().beta.sessions.events.stream(sessionId, {
-          event_deltas: ["agent.message"],
+          event_deltas: ["agent.message", "agent.thinking"],
         });
 
         if (cursor) {

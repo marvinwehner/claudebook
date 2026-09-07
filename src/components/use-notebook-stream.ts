@@ -29,6 +29,21 @@ export interface StreamState {
 }
 
 /**
+ * Folds one delta into the preview buffer. `index` is the content-array entry
+ * the fragment lands in, not a sequence number, so a repeat index appends.
+ *
+ * Pure and exported so the append semantics have a test.
+ */
+export function applyDelta(
+  previews: Map<string, string[]>,
+  event: Extract<UiEvent, { kind: "delta" }>,
+): Map<string, string[]> {
+  const parts = [...(previews.get(event.id) ?? [])];
+  parts[event.index] = (parts[event.index] ?? "") + event.text;
+  return new Map(previews).set(event.id, parts);
+}
+
+/**
  * Subscribes to the notebook's SSE relay.
  *
  * EventSource does the reconnection: the server closes at ~4 minutes to stay
@@ -59,16 +74,12 @@ export function useNotebookStream(
     (event: StreamEvent) => {
       switch (event.kind) {
         case "delta":
-          // Best-effort: deltas can be shed under load, so this is only ever a
-          // prefix of what the buffered message will say. Stored by index so a
-          // resume that replays deltas overwrites rather than concatenates.
-          setPreviews((current) => {
-            const parts = [...(current.get(event.id) ?? [])];
-            parts[event.index] = event.text;
-            const next = new Map(current);
-            next.set(event.id, parts);
-            return next;
-          });
+          // The relay opens the upstream stream before replaying history, so a
+          // delta can arrive after its message already rendered. Nothing would
+          // clear the preview it would rebuild.
+          if (seen.has(event.id)) return;
+
+          setPreviews((current) => applyDelta(current, event));
           setThinking(false);
           return;
 
@@ -104,10 +115,16 @@ export function useNotebookStream(
           return;
 
         case "status":
-          setRunning(event.status === "running");
+          // Rescheduling means recovering from an error and queued to resume —
+          // still busy, and going quiet here reads as a dead agent.
+          setRunning(event.status === "running" || event.status === "rescheduling");
           // A turn that ends without a buffered message — interrupted, errored,
-          // terminated — would otherwise leave its preview stranded.
-          if (event.status === "idle" || event.status === "terminated") {
+          // rescheduled — would otherwise leave its preview stranded.
+          if (
+            event.status === "idle" ||
+            event.status === "terminated" ||
+            event.status === "rescheduling"
+          ) {
             setPreviews((current) => (current.size === 0 ? current : new Map()));
           }
           if (event.status === "idle") {
