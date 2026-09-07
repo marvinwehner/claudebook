@@ -14,4 +14,4 @@ export const SITE_NAME = "Claudebook";
 export const SITE_DESCRIPTION = "A private notebook that reads your sources. Invite only.";
 
 
-export const REPO_URL = "https://github.com/mavonic/claudebook";
+export const REPO_URL = "https://github.com/marvinwehner/claudebook";
