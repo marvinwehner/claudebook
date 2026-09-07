@@ -120,7 +120,10 @@ A ground-up rewrite; every v2 tutorial is wrong. No `HeroUIProvider`, no `tailwi
   starve normal SSR.
 - Console-set env vars **silently override** `apphosting.yaml`. Use the YAML only.
 - The CLI flag is `--primary-region`, not `--location`. Running `backends:create` without a TTY
-  silently skips the GitHub link, and there is no `backends:update` to add one afterwards.
+  silently skips the GitHub link, and there is no `backends:update` to add one afterwards — but the
+  CLI is not the whole API: `PATCH backends/<id>?updateMask=codebase.repository` does repoint a
+  backend at a different Developer Connect link, which is how the GitHub rename was fixed without
+  deleting anything.
 
 ## React 19
 

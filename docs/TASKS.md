@@ -598,6 +598,30 @@ generated `opengraph-image` and a `robots.ts`.
   A public 200 shell at `/` would remove the dependency on redirect-following, but it is a change to
   the auth gate and was not needed.
 
+### GitHub account rename — `mavonic` → `marvinwehner` (2026-09-07)
+
+The account was renamed. GitHub redirects old repository URLs, but only until the freed username is
+claimed by someone else, so `src/lib/config/site.ts` and `LICENSE` were updated rather than left to
+the redirect. Commit attribution was unaffected: every commit is authored as a real address, not a
+`users.noreply.github.com` one.
+
+- [x] `git remote set-url origin https://github.com/marvinwehner/claudebook.git`
+- [x] `REPO_URL` in `src/lib/config/site.ts`, `LICENSE` copyright line. `SITE_URL` needed no change —
+      it is derived from the backend name, project and region, and has nothing to do with GitHub.
+- [x] **The rename broke App Hosting's push trigger, and nothing else.** Evidence: the five commits
+      before the rename each produced a rollout 7–30s after the commit (`rollout-2026-09-07-001`
+      through `-005`); the first commit after it produced nothing in ~8 minutes. A **manual**
+      `apphosting:rollouts:create --git-commit` still worked and printed the commit message, so the
+      Developer Connect link could still *read* the repo — only the webhook match was stale.
+- [x] **`AGENTS.md` was wrong that the repo link cannot be changed after create.** That is true of
+      the `firebase` CLI, which has no `backends:update`. The underlying REST API does support it:
+      `PATCH .../backends/claudebook?updateMask=codebase.repository` is accepted and returns a normal
+      LRO. Verified first with a no-op patch (same value) before mutating anything.
+- [x] Fixed **without deleting the backend or the project**: created a second git repository link
+      `marvinwehner-claudebook` with the new clone URI, then patched `codebase.repository` onto it.
+      The stale `mavonic-claudebook` link is deliberately left in place as a one-PATCH rollback.
+- [ ] Delete the stale `mavonic-claudebook` link once auto-deploy has been stable for a while.
+
 ---
 
 ## Deferred (explicitly out of scope for v1)
