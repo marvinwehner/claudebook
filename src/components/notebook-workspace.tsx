@@ -9,6 +9,7 @@ import type { Artifact } from "@/lib/anthropic/files";
 import { api } from "@/lib/api/client";
 import type { Notebook } from "@/lib/firestore/notebooks";
 import type { Source } from "@/lib/firestore/sources";
+import type { UsageTotals } from "@/lib/usage";
 import { ArtifactsRail } from "@/components/artifacts-rail";
 import { ChatPane } from "@/components/chat-pane";
 import { NotebookIcon } from "@/components/notebook-icon";
@@ -25,11 +26,13 @@ export function NotebookWorkspace({
   initialSources,
   initialEvents,
   initialCursor,
+  initialUsage,
 }: {
   notebook: Notebook;
   initialSources: Source[];
   initialEvents: UiEvent[];
   initialCursor: string | null;
+  initialUsage: UsageTotals;
 }) {
   const [sources, setSources] = useState(initialSources);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
@@ -93,7 +96,12 @@ export function NotebookWorkspace({
 
       <div className="flex min-h-0 flex-1 gap-3">
         <SourcesRail notebookId={notebook.id} sources={sources} onChange={setSources} />
-        <ChatPane notebookId={notebook.id} stream={stream} hasSources={sources.length > 0} />
+        <ChatPane
+          notebookId={notebook.id}
+          stream={stream}
+          hasSources={sources.length > 0}
+          initialUsage={initialUsage}
+        />
         <ArtifactsRail notebookId={notebook.id} artifacts={artifacts} loading={loadingArtifacts} />
       </div>
     </div>

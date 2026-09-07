@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { getSessionUser } from "@/lib/auth/dal";
 import { NotFoundError } from "@/lib/notebooks/errors";
-import { requireNotebook } from "@/lib/notebooks/notebook-service";
+import { lifetimeUsage, requireNotebook } from "@/lib/notebooks/notebook-service";
 import { listSources } from "@/lib/notebooks/source-service";
 import { loadTranscript } from "@/lib/notebooks/transcript-service";
 import { AppNav } from "@/components/app-nav";
@@ -41,6 +41,7 @@ export default async function NotebookPage({ params }: PageProps<"/notebooks/[id
         initialSources={sources}
         initialEvents={transcript.events}
         initialCursor={transcript.cursor}
+        initialUsage={lifetimeUsage(notebook)}
       />
     </div>
   );

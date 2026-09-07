@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeCursor, encodeCursor, isTurnComplete, normalizeEvent, type UiEvent } from "./events";
+import {
+  decodeCursor,
+  encodeCursor,
+  isTurnComplete,
+  normalizeEvent,
+  usageFromSession,
+  type UiEvent,
+} from "./events";
+import { ZERO_USAGE } from "@/lib/usage";
 
 // The SDK's event union is wide and mostly irrelevant here; each test builds the
 // few fields normalizeEvent actually reads.
@@ -186,6 +194,9 @@ describe("normalizeEvent", () => {
       "session.thread_created",
       "span.model_request_start",
       "agent.thread_message_sent",
+      // Read out-of-band by the relay, which emits a lifetime total instead.
+      // Keeping it out of the transcript also stops it eating an event slot.
+      "session.usage",
     ]) {
       expect(normalizeEvent(asEvent({ type, id: "sevt_x", processed_at: AT }))).toBeNull();
     }
@@ -248,5 +259,52 @@ describe("cursor codec", () => {
     expect(decodeCursor(`${AT}|`)).toBeNull(); // no event id
     expect(decodeCursor("|sevt_1")).toBeNull(); // no timestamp
     expect(decodeCursor("not-a-date|sevt_1")).toBeNull();
+  });
+});
+
+describe("usageFromSession", () => {
+  it("maps a full snapshot, summing both cache-creation lifetimes", () => {
+    expect(
+      usageFromSession({
+        input_tokens: 12_400,
+        output_tokens: 3100,
+        cache_read_input_tokens: 148_000,
+        cache_creation: { ephemeral_1h_input_tokens: 900, ephemeral_5m_input_tokens: 100 },
+        server_tool_use: { web_search_requests: 2, web_fetch_requests: 7 },
+        active_seconds: 252,
+        list_cost: { amount: "83", currency: "USD" },
+      }),
+    ).toEqual({
+      inputTokens: 12_400,
+      outputTokens: 3100,
+      cacheReadTokens: 148_000,
+      cacheCreationTokens: 1000,
+      // web_fetch is not metered, so it is not carried.
+      webSearches: 2,
+      activeSeconds: 252,
+      costCents: 83,
+    });
+  });
+
+  it("reads every absent field as zero rather than throwing", () => {
+    expect(usageFromSession({})).toEqual(ZERO_USAGE);
+    expect(usageFromSession(undefined)).toEqual(ZERO_USAGE);
+    expect(usageFromSession({ list_cost: null, server_tool_use: null })).toEqual(ZERO_USAGE);
+  });
+
+  // The amount is a string in minor units precisely so no float rounding is
+  // ever applied to money — parsing it as a float would undo that.
+  it("keeps money in integer cents", () => {
+    expect(usageFromSession({ list_cost: { amount: "5000", currency: "USD" } }).costCents).toBe(
+      5000,
+    );
+    expect(usageFromSession({ list_cost: { amount: "0", currency: "USD" } }).costCents).toBe(0);
+  });
+
+  // The reason for the `|| 0`: NaN cents would render as "$NaN" and, worse,
+  // poison every total it was added to.
+  it("falls back to zero on an amount it cannot parse", () => {
+    expect(usageFromSession({ list_cost: { amount: "abc", currency: "USD" } }).costCents).toBe(0);
+    expect(usageFromSession({ list_cost: { amount: "", currency: "USD" } }).costCents).toBe(0);
   });
 });

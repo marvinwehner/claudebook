@@ -1,12 +1,19 @@
 "use client";
 
 import { Comments, PaperPlane, Stop, TriangleExclamation } from "@gravity-ui/icons";
-import { Button, Spinner, TextArea, TextField } from "@heroui/react";
+import { Button, Spinner, TextArea, TextField, Tooltip } from "@heroui/react";
 import { useEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
 
 import type { UiEvent } from "@/lib/anthropic/events";
 import { api, ApiError } from "@/lib/api/client";
+import {
+  formatActive,
+  formatCost,
+  formatTokens,
+  isEmptyUsage,
+  type UsageTotals,
+} from "@/lib/usage";
 import type { StreamState } from "@/components/use-notebook-stream";
 
 function Bubble({ role, children }: { role: "user" | "agent"; children: React.ReactNode }) {
@@ -32,6 +39,43 @@ function Markdown({ text, isStreaming }: { text: string; isStreaming?: boolean }
     <Streamdown className="claudebook-markdown" isAnimating={isStreaming}>
       {text}
     </Streamdown>
+  );
+}
+
+/**
+ * What this notebook has cost, across every session it has ever had.
+ *
+ * The headline tokens are input + output only. Cache reads are broken out
+ * rather than folded in, because Anthropic's input count already excludes
+ * them — adding them would make the headline disagree with the breakdown.
+ */
+function UsageReadout({ usage }: { usage: UsageTotals }) {
+  // A notebook that has never run a turn says nothing rather than "$0.00".
+  if (isEmptyUsage(usage)) return null;
+
+  return (
+    <Tooltip>
+      <Tooltip.Trigger className="shrink-0 cursor-default">
+        {formatCost(usage.costCents)} · {formatTokens(usage.inputTokens + usage.outputTokens)}{" "}
+        tokens
+      </Tooltip.Trigger>
+      <Tooltip.Content>
+        <div className="flex flex-col gap-0.5">
+          <span>
+            {formatTokens(usage.inputTokens)} in · {formatTokens(usage.outputTokens)} out
+          </span>
+          <span>
+            {formatTokens(usage.cacheReadTokens)} cached · {formatActive(usage.activeSeconds)}{" "}
+            active
+          </span>
+          {usage.webSearches > 0 ? (
+            <span>
+              {usage.webSearches} web {usage.webSearches === 1 ? "search" : "searches"}
+            </span>
+          ) : null}
+        </div>
+      </Tooltip.Content>
+    </Tooltip>
   );
 }
 
@@ -75,10 +119,12 @@ export function ChatPane({
   notebookId,
   stream,
   hasSources,
+  initialUsage,
 }: {
   notebookId: string;
   stream: StreamState;
   hasSources: boolean;
+  initialUsage: UsageTotals;
 }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -190,10 +236,17 @@ export function ChatPane({
           </TextField>
 
           <div className="flex items-center justify-between gap-3">
-            <span className="text-muted text-xs">
-              {stream.connected ? "" : "Reconnecting…"}
-              {error ? <span className="text-danger">{error}</span> : null}
-            </span>
+            {/* The meta slot: what the notebook has cost, and anything wrong
+                with the connection. Both are quiet most of the time. */}
+            <div className="text-muted flex min-w-0 items-center gap-3 text-xs">
+              {/* The relay pushes on connect, so the seed only covers that
+                  first moment — without it the figure would flash in. */}
+              <UsageReadout usage={stream.usage ?? initialUsage} />
+              <span className="truncate">
+                {stream.connected ? "" : "Reconnecting…"}
+                {error ? <span className="text-danger">{error}</span> : null}
+              </span>
+            </div>
 
             <div className="flex gap-2">
               {stream.isRunning ? (

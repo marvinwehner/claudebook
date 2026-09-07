@@ -167,6 +167,7 @@ Rule: a route handler never imports the Anthropic SDK or `firebase-admin` direct
 notebooks/{notebookId}
   ownerId, title, icon, model, customInstructions?,
   sessionId, agentVersion, sessionStatus,
+  usage { retired, current, currentSessionId },
   createdAt, updatedAt, lastMessageAt
 
 notebooks/{notebookId}/sources/{sourceId}
@@ -176,6 +177,10 @@ notebooks/{notebookId}/sources/{sourceId}
 
 Artifacts are **not** mirrored — they are listed live from `files.list({ scope_id })`. One less thing
 to keep in sync. Index: `notebooks` on `(ownerId ASC, updatedAt DESC)`.
+
+`usage` is the one thing that _must_ be mirrored, for the opposite reason: Anthropic meters per
+session, and a notebook outlives its sessions. `retired` is what dead sessions came to, `current`
+is the live session's own cumulative total, and the displayed figure is the sum. See Phase 9.
 
 ### `ensureSession(notebook)` — the single choke point
 

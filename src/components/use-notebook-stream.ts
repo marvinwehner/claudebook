@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { StreamEvent, UiEvent } from "@/lib/anthropic/events";
 import type { Artifact } from "@/lib/anthropic/files";
+import type { UsageTotals } from "@/lib/usage";
 
 export interface ToolActivity {
   toolUseId: string;
@@ -18,6 +19,13 @@ export interface StreamState {
   isThinking: boolean;
   activeTools: ToolActivity[];
   connected: boolean;
+  /**
+   * The notebook lifetime total, or null until the relay has sent one — it
+   * pushes on connect, so this is null only for the first moment. The frame
+   * always carries the full total, so this replaces rather than accumulates,
+   * which is what makes a reconnect that replays events harmless here.
+   */
+  usage: UsageTotals | null;
 }
 
 /**
@@ -41,6 +49,7 @@ export function useNotebookStream(
   const [isThinking, setThinking] = useState(false);
   const [activeTools, setActiveTools] = useState<ToolActivity[]>([]);
   const [connected, setConnected] = useState(false);
+  const [usage, setUsage] = useState<UsageTotals | null>(null);
 
   // Not a ref: a ref written during render is exactly what React 19 warns
   // about, and `seen` only ever changes from inside an event callback.
@@ -112,6 +121,7 @@ export function useNotebookStream(
           return;
 
         case "usage":
+          setUsage(event.usage);
           return;
       }
 
@@ -165,5 +175,5 @@ export function useNotebookStream(
     // value and does not tear the subscription down on every render.
   }, [notebookId, initialCursor, handle]);
 
-  return { events, previews, isRunning, isThinking, activeTools, connected };
+  return { events, previews, isRunning, isThinking, activeTools, connected, usage };
 }

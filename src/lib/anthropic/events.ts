@@ -1,6 +1,7 @@
 import type { Anthropic } from "@anthropic-ai/sdk";
 
 import type { Artifact } from "@/lib/anthropic/files";
+import { ZERO_USAGE, type UsageTotals } from "@/lib/usage";
 
 /**
  * Anthropic session events → the small set of things the UI actually renders,
@@ -40,13 +41,6 @@ export type UiEvent =
       status: "running" | "idle" | "terminated" | "rescheduling";
       stopReason?: string;
     }
-  | {
-      kind: "usage";
-      id: string;
-      at: string;
-      inputTokens: number;
-      outputTokens: number;
-    }
   | { kind: "error"; id: string; at: string; message: string };
 
 /**
@@ -55,8 +49,16 @@ export type UiEvent =
  */
 export type ArtifactsEvent = { kind: "artifacts"; artifacts: Artifact[] };
 
-/** Everything the SSE relay sends: the transcript events plus the synthesised one. */
-export type StreamEvent = UiEvent | ArtifactsEvent;
+/**
+ * Also synthesised, and always the notebook lifetime total rather than the live
+ * session's own — a session is rebuilt on rehydration and on a model change, so
+ * what Anthropic reports would drop back to zero. The relay is the only producer
+ * of this frame, which is what keeps the frame meaning one thing on the client.
+ */
+export type UsageEvent = { kind: "usage"; usage: UsageTotals };
+
+/** Everything the SSE relay sends: the transcript events plus the synthesised ones. */
+export type StreamEvent = UiEvent | ArtifactsEvent | UsageEvent;
 
 function textOf(content: Array<{ type: string; text?: string }>): string {
   return content
@@ -166,14 +168,11 @@ export function normalizeEvent(event: SessionEvent): UiEvent | null {
         status: "rescheduling",
       };
 
+    // Not a transcript event: the relay reads the snapshot off it directly and
+    // emits a lifetime total instead. Normalising it here would also spend one
+    // of loadTranscript's capped event slots to render nothing.
     case "session.usage":
-      return {
-        kind: "usage",
-        id: event.id,
-        at: event.processed_at,
-        inputTokens: event.usage.input_tokens ?? 0,
-        outputTokens: event.usage.output_tokens ?? 0,
-      };
+      return null;
 
     case "session.error":
       return {
@@ -186,6 +185,39 @@ export function normalizeEvent(event: SessionEvent): UiEvent | null {
     default:
       return null;
   }
+}
+
+/**
+ * The session's own cumulative usage — off the session object, or off the
+ * snapshot carried by a `session.usage` event. The two are the same shape.
+ *
+ * Every field is optional on the wire and every one of them is money, but a
+ * missing one reads as zero rather than throwing: a readout that is behind is
+ * better than a stream that dies.
+ */
+export function usageFromSession(
+  usage:
+    | Anthropic.Beta.Sessions.BetaManagedAgentsSessionUsage
+    | Anthropic.Beta.Sessions.BetaManagedAgentsSessionUsageSnapshot
+    | undefined,
+): UsageTotals {
+  if (!usage) return ZERO_USAGE;
+
+  const cacheCreation = usage.cache_creation;
+
+  return {
+    inputTokens: usage.input_tokens ?? 0,
+    outputTokens: usage.output_tokens ?? 0,
+    cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+    cacheCreationTokens:
+      (cacheCreation?.ephemeral_1h_input_tokens ?? 0) +
+      (cacheCreation?.ephemeral_5m_input_tokens ?? 0),
+    webSearches: usage.server_tool_use?.web_search_requests ?? 0,
+    activeSeconds: usage.active_seconds ?? 0,
+    // An integer string in minor units. Number() would also accept "1e3" and
+    // decimal forms; parseInt keeps this to what the API documents it sends.
+    costCents: usage.list_cost ? parseInt(usage.list_cost.amount, 10) || 0 : 0,
+  };
 }
 
 /** A turn is over only when the agent is idle and not waiting on us. */

@@ -371,6 +371,80 @@ decision, so it needs a call rather than a quiet edit.
 
 ---
 
+## Phase 9 — per-notebook usage and cost
+
+- [x] **The data was already on the wire and being thrown away.** `session.usage` was
+      normalised, relayed, subscribed to — and dropped by a one-line `return` in
+      `use-notebook-stream`. Separately, `sessions.retrieve()` (called on every request via
+      `ensureSession`) returns the full cumulative `usage`, and we read only `status`.
+- [x] **No per-model price table, and there should never be one.** The session carries
+      `usage.list_cost` as an integer string in minor units, and it already includes web
+      searches and $0.08/h of active runtime. A price table keyed on the model would go stale
+      _and_ silently miss the runtime component. Money is kept in integer cents end to end and
+      formatted only at the edge. The figure is Anthropic's public list rate rather than a
+      contracted price — still the right one to show, being exactly what the $50 cap is
+      enforced against.
+- [x] **Usage is cumulative per session, not a per-turn delta.** So every write is a
+      _replace_, never an increment — which is what makes it safe to drive from the relay,
+      whose reconnects replay events either side of the seam. This one fact removed the
+      whole double-counting problem rather than requiring a dedupe.
+- [x] **Firestore is the only place a lifetime figure can live.** A session is rebuilt on
+      rehydration and on a model change, and both reset Anthropic's counter to zero. The
+      roll-up (`retired += current`, `current = 0`) rides inside the existing
+      `claimSessionId` transaction — already the atomic moment a notebook swaps sessions —
+      and is repeated on the model-change path in `updateNotebook`.
+      Accepted: a vanished session cannot be re-read, so the roll-up banks its **last
+      persisted snapshot**. Only usage since the last completed turn is lost.
+- [x] `session.usage` now normalises to `null`. The relay reads the snapshot off the raw
+      event instead, so it no longer spends one of `loadTranscript`'s 500 `MAX_EVENTS` slots
+      to render nothing. `UsageEvent` joins `ArtifactsEvent` as a synthesised frame carrying
+      the **lifetime** total, so `kind: "usage"` means one thing on the client.
+- [x] Three emit points: on connect (free — `liveSession` already returns the session with
+      its usage), on a `session.usage` event (the SDK types it "periodic" but the docs only
+      promise it at the spend cap, so it is a bonus), and one `sessions.retrieve()` at turn
+      end beside the artifact sweep (the reliable one — no rendered event carries a turn's
+      cost). Redundant writes are skipped inside the transaction: a relay reconnects every
+      four minutes for as long as a tab is open, and on an idle notebook that is the same
+      numbers over and over.
+
+### Corrections review forced
+
+- **The first cut let the figure go backwards, permanently.** Three producers report a
+  session's usage — the relay on connect, a `session.usage` event, and the read after a
+  turn — each from its own `sessions.retrieve`, and nothing orders them. Two reads issued
+  together can land in either order, so a plain replace let an older snapshot overwrite a
+  newer one; a later roll-up then banked the lower number and the difference was gone for
+  good. `recordSessionUsage` now merges with `maxUsage` rather than replacing. Usage only
+  grows within a session, so the loser of the race is a no-op instead of a regression.
+- **`pushUsage` used to bail on `closed` before persisting.** Closing a tab a moment after a
+  turn ended threw away the figure that had just been read — and if the session then expired,
+  the whole turn's cost vanished from the lifetime total. It now always persists; only the
+  SSE frame is skipped. Safe to do only because of the merge above, which is what stops a
+  late write from a dying relay clobbering a newer one.
+- **The model-change roll-up was a read-modify-write on a field a transaction owns**, with an
+  `archiveSession` round trip inside the window — the exact race the comment on
+  `recordSessionUsage` warns about. It is now `retireSessionUsage`, transactional like
+  `claimSessionId`, and runs _after_ `sessionId` is cleared so the repository's guard has
+  already started rejecting writes for the retired session.
+- **The relay was combining Anthropic and Firestore itself**, which AGENTS.md reserves for
+  the service layer. The turn-end retrieve and the persist moved into `recordTurnUsage`.
+  (The file's pre-existing SDK imports for streaming and artifact listing stay — those are
+  pure Anthropic reads, not a combination.)
+
+Verified end to end against real Firestore and the real API, including the one case unit
+tests cannot reach: a scratch notebook billed $0.02, then switched Sonnet 5 -> Opus 5 to force
+a rebuild. The figure held at $0.02, and Firestore showed `retired` holding the dead session's
+totals with `current` reset against the new session id.
+
+### Still open
+
+- [ ] **Surface `budget_reached` in the UI** — see Phase 8. This work makes it cheap (the
+      `session.usage` event carries `budget` alongside the spend, and `sessions.update`
+      takes a new cap), but it still needs a decision on who may raise one, given that
+      removal is one-way.
+
+---
+
 ## Deferred (explicitly out of scope for v1)
 
 - Source viewer / re-download of uploaded sources (Anthropic returns `downloadable: false` for uploads;

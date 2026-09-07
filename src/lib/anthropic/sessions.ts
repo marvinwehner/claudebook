@@ -9,6 +9,8 @@ import {
   type NotebookModel,
 } from "@/lib/anthropic/agent";
 import { agentId, anthropic, environmentId } from "@/lib/anthropic/client";
+import { usageFromSession } from "@/lib/anthropic/events";
+import type { UsageTotals } from "@/lib/usage";
 
 type Session = Anthropic.Beta.Sessions.BetaManagedAgentsSession;
 
@@ -215,6 +217,17 @@ export async function sendUserMessage(
   }
 
   await anthropic().beta.sessions.events.send(sessionId, { events });
+}
+
+/**
+ * The session's cumulative usage, or null once it has gone.
+ *
+ * A turn's cost is not carried by any event we render, so the only way to know
+ * what one came to is to ask the session afterwards.
+ */
+export async function sessionUsage(sessionId: string): Promise<UsageTotals | null> {
+  const session = await retrieve(sessionId);
+  return session ? usageFromSession(session.usage) : null;
 }
 
 export async function interrupt(sessionId: string): Promise<void> {

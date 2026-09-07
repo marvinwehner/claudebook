@@ -7,13 +7,20 @@ import {
   encodeCursor,
   isTurnComplete,
   normalizeEvent,
+  usageFromSession,
   type StreamEvent,
   type UiEvent,
 } from "@/lib/anthropic/events";
 import { listArtifacts } from "@/lib/anthropic/files";
 import { requireUser } from "@/lib/auth/dal";
 import { ConflictError, toErrorResponse } from "@/lib/notebooks/errors";
-import { liveSession, requireNotebook } from "@/lib/notebooks/notebook-service";
+import {
+  liveSession,
+  recordTurnUsage,
+  recordUsage,
+  requireNotebook,
+} from "@/lib/notebooks/notebook-service";
+import type { UsageTotals } from "@/lib/usage";
 
 /**
  * SSE relay: Anthropic's session stream, normalised and re-emitted to the
@@ -61,13 +68,20 @@ function frame(event: StreamEvent, cursor: string | null): string {
 }
 
 export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[id]/stream">) {
+  let notebookId: string;
   let sessionId: string;
+  let openingUsage: UsageTotals;
 
   try {
     const user = await requireUser();
     const { id } = await ctx.params;
     const notebook = await requireNotebook(id, user.uid);
-    sessionId = (await liveSession(notebook)).session.id;
+    const { session } = await liveSession(notebook);
+    notebookId = notebook.id;
+    sessionId = session.id;
+    // Free: the session we just resolved already carries its cumulative
+    // usage, so opening a stream costs no extra call to learn the figure.
+    openingUsage = usageFromSession(session.usage);
   } catch (error) {
     // A conflict means another request is mid-rebuild. Closing a valid stream
     // lets EventSource reconnect; a non-2xx would stop it for good.
@@ -119,6 +133,41 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
           ),
         );
       };
+
+      /**
+       * Persists the session's cumulative usage and emits the notebook lifetime
+       * total that comes back. The relay is the only producer of a `usage`
+       * frame, so the client never has to combine anything.
+       *
+       * Never throws: a readout is not worth a dropped stream.
+       */
+      // Deliberately persists even once `closed` — the figure was read before
+      // the tab went away and is the freshest that exists. Dropping it would
+      // leave the turn uncounted until the notebook is next opened, and lose
+      // it outright if the session expires first.
+      async function pushUsage(current: UsageTotals) {
+        try {
+          const lifetime = await recordUsage(notebookId, sessionId, current);
+          // Null means the notebook moved to a different session while this
+          // was in flight; that session has its own relay to report it.
+          if (closed || !lifetime) return;
+          send(frame({ kind: "usage", usage: lifetime }, null));
+        } catch (error) {
+          console.error("Usage write failed:", error);
+        }
+      }
+
+      // A turn's cost is carried by no event we render, so the figure has to be
+      // asked for once the turn is over. One metadata GET per completed turn.
+      async function refreshUsage() {
+        try {
+          const lifetime = await recordTurnUsage(notebookId, sessionId);
+          if (closed || !lifetime) return;
+          send(frame({ kind: "usage", usage: lifetime }, null));
+        } catch (error) {
+          console.error("Usage refresh failed:", error);
+        }
+      }
 
       let lastArtifacts: string | null = null;
       let sweepToken = 0;
@@ -179,6 +228,9 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
       // would leave a visible gap after every one. Ask for a shorter one.
       send("retry: 750\n\n");
 
+      // Paint the figure straight away rather than at the first turn end.
+      void pushUsage(openingUsage);
+
       request.signal.addEventListener("abort", () => finish());
 
       try {
@@ -206,7 +258,8 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
           }
 
           // A turn that ended while we were disconnected is only ever seen
-          // here, so without this its artifacts wait for the next turn.
+          // here, so without this its artifacts wait for the next turn. Usage
+          // needs no equivalent: the connect above already read it fresh.
           if (replayedTurnEnd) void sweepArtifacts();
         }
 
@@ -222,10 +275,22 @@ export async function GET(request: Request, ctx: RouteContext<"/api/notebooks/[i
             continue;
           }
 
+          // Dropped by normalizeEvent so it never reaches the transcript; the
+          // snapshot it carries is the whole point of the event. The SDK calls
+          // it periodic, the docs only promise it at the spend cap, so treat it
+          // as a free early update and let refreshUsage be the reliable one.
+          if (raw.type === "session.usage") {
+            void pushUsage(usageFromSession(raw.usage));
+            continue;
+          }
+
           const event = normalizeEvent(raw);
           emit(raw, event);
 
-          if (event && isTurnComplete(event)) void sweepArtifacts();
+          if (event && isTurnComplete(event)) {
+            void sweepArtifacts();
+            void refreshUsage();
+          }
         }
       } catch (error) {
         if (!closed) {

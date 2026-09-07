@@ -10,6 +10,16 @@ import {
 import type { NotebookModel } from "@/lib/anthropic/agent";
 import { adminDb } from "@/lib/firebase/admin";
 import { DEFAULT_NOTEBOOK_ICON } from "@/lib/notebook-icons";
+import {
+  addUsage,
+  EMPTY_NOTEBOOK_USAGE,
+  maxUsage,
+  notebookUsageFrom,
+  rollUp,
+  sameUsage,
+  type NotebookUsage,
+  type UsageTotals,
+} from "@/lib/usage";
 
 /**
  * The ownership record for a notebook.
@@ -35,6 +45,7 @@ export interface Notebook {
    * can ride along with the next user message.
    */
   pendingSeedNote?: string;
+  usage: NotebookUsage;
   createdAt: string;
   updatedAt: string;
   lastMessageAt: string | null;
@@ -59,6 +70,7 @@ function fromSnapshot(snapshot: QueryDocumentSnapshot<DocumentData>): Notebook {
     agentVersion: data.agentVersion ?? null,
     sessionStatus: data.sessionStatus ?? null,
     pendingSeedNote: data.pendingSeedNote || undefined,
+    usage: notebookUsageFrom(data.usage),
     createdAt: iso(data.createdAt) ?? new Date(0).toISOString(),
     updatedAt: iso(data.updatedAt) ?? new Date(0).toISOString(),
     lastMessageAt: iso(data.lastMessageAt),
@@ -88,6 +100,7 @@ export async function createNotebook(input: CreateNotebookInput): Promise<Notebo
     sessionId: null,
     agentVersion: null,
     sessionStatus: null,
+    usage: EMPTY_NOTEBOOK_USAGE,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     lastMessageAt: null,
@@ -153,6 +166,85 @@ export async function updateNotebook(id: string, patch: NotebookPatch): Promise<
   await collection().doc(id).update(update);
 }
 
+/**
+ * Records the live session's cumulative usage.
+ *
+ * Written through dotted paths so `usage.retired` is untouchable from here —
+ * the roll-up owns that field, and a replace of the whole map would race it.
+ * The session-id guard covers the other direction: a snapshot that arrives
+ * after the notebook has already moved to a new session would otherwise
+ * double-count, since the roll-up has by then banked those same totals.
+ *
+ * Deliberately does not touch `updatedAt` — that orders the notebook list, and
+ * merely opening a notebook writes usage on connect.
+ *
+ * Returns the notebook lifetime total as of this write, read inside the same
+ * transaction; null when the guard rejected it. Computing it here rather than
+ * letting the caller add its own `retired` matters, because a relay holds one
+ * notebook snapshot for the life of a connection and a rebuild moves `retired`
+ * underneath it.
+ */
+export async function recordSessionUsage(
+  id: string,
+  sessionId: string,
+  totals: UsageTotals,
+): Promise<UsageTotals | null> {
+  const ref = collection().doc(id);
+
+  return adminDb().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) return null;
+    if ((snapshot.get("sessionId") ?? null) !== sessionId) return null;
+
+    const usage = notebookUsageFrom(snapshot.get("usage"));
+
+    // Nothing orders the three producers of a snapshot, so an older read can
+    // arrive after a newer one. A session's usage only grows, so merging by
+    // field makes the loser of that race a no-op rather than a regression —
+    // which matters because a roll-up would otherwise bank the lower figure
+    // and lose the difference for good.
+    const merged = usage.currentSessionId === sessionId ? maxUsage(usage.current, totals) : totals;
+
+    const lifetime = addUsage(usage.retired, merged);
+
+    // A relay re-reads usage on every connect, and it reconnects every four
+    // minutes for as long as a tab is open. On an idle notebook that is the
+    // same numbers over and over, so do not spend a write on them.
+    if (usage.currentSessionId === sessionId && sameUsage(usage.current, merged)) {
+      return lifetime;
+    }
+
+    transaction.update(ref, {
+      "usage.current": merged,
+      "usage.currentSessionId": sessionId,
+    });
+    return lifetime;
+  });
+}
+
+/**
+ * Banks the live session into `retired` and clears `current`, for the one case
+ * a session is discarded deliberately rather than found missing: a model
+ * change.
+ *
+ * Transactional and re-reading `usage` for the same reason `claimSessionId` is:
+ * a relay may still be writing snapshots for the session being retired. The
+ * caller must have already cleared `sessionId`, which is what makes those
+ * writes start failing `recordSessionUsage`'s guard.
+ */
+export async function retireSessionUsage(id: string): Promise<NotebookUsage> {
+  const ref = collection().doc(id);
+
+  return adminDb().runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) return EMPTY_NOTEBOOK_USAGE;
+
+    const usage = rollUp(notebookUsageFrom(snapshot.get("usage")), null);
+    transaction.update(ref, { usage });
+    return usage;
+  });
+}
+
 export interface SessionClaim {
   sessionId: string;
   sessionStatus: string | null;
@@ -180,10 +272,17 @@ export async function claimSessionId(
     if (!snapshot.exists) return false;
     if ((snapshot.get("sessionId") ?? null) !== expected) return false;
 
+    // The outgoing session is already gone — that is why we are rebuilding —
+    // so its last persisted snapshot is the most that can ever be known of it.
+    // Banking it here, inside the transaction that swaps the session, is what
+    // keeps the lifetime figure from resetting.
+    const usage = notebookUsageFrom(snapshot.get("usage"));
+
     const update: Record<string, unknown> = {
       sessionId: claim.sessionId,
       sessionStatus: claim.sessionStatus,
       agentVersion: claim.agentVersion,
+      usage: rollUp(usage, claim.sessionId),
       updatedAt: FieldValue.serverTimestamp(),
     };
     if (claim.pendingSeedNote) update.pendingSeedNote = claim.pendingSeedNote;

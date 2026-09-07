@@ -4,11 +4,17 @@ import type { Anthropic } from "@anthropic-ai/sdk";
 
 import { isNotebookModel, type NotebookModel } from "@/lib/anthropic/agent";
 import { deleteFile } from "@/lib/anthropic/files";
-import { archiveSession, ensureSession, type SessionSpec } from "@/lib/anthropic/sessions";
+import {
+  archiveSession,
+  ensureSession,
+  sessionUsage,
+  type SessionSpec,
+} from "@/lib/anthropic/sessions";
 import * as notebooks from "@/lib/firestore/notebooks";
 import * as sources from "@/lib/firestore/sources";
 import { DEFAULT_NOTEBOOK_ICON } from "@/lib/notebook-icons";
 import { ConflictError, NotFoundError, ValidationError } from "@/lib/notebooks/errors";
+import { addUsage, type UsageTotals } from "@/lib/usage";
 
 export type Notebook = notebooks.Notebook;
 
@@ -144,6 +150,42 @@ export async function markMessageSent(notebookId: string): Promise<void> {
   await notebooks.updateNotebook(notebookId, { touchLastMessage: true });
 }
 
+/** What this notebook has cost across every session it has ever had. */
+export function lifetimeUsage(notebook: Notebook): UsageTotals {
+  return addUsage(notebook.usage.retired, notebook.usage.current);
+}
+
+/**
+ * Persists the live session's cumulative usage and returns the notebook
+ * lifetime total to show for it.
+ *
+ * Anthropic's figure is cumulative across the session's turns, not a per-turn
+ * delta, so this is a replace and never an increment — which is what makes it
+ * safe to call from the relay, whose reconnects replay events either side of
+ * the seam. Null when the notebook has moved to a different session since.
+ */
+export async function recordUsage(
+  notebookId: string,
+  sessionId: string,
+  current: UsageTotals,
+): Promise<UsageTotals | null> {
+  return notebooks.recordSessionUsage(notebookId, sessionId, current);
+}
+
+/**
+ * Reads the session's usage and persists it, for the end of a turn.
+ *
+ * The read and the write live together here rather than in the relay because
+ * this is the layer where Anthropic and Firestore are allowed to meet.
+ */
+export async function recordTurnUsage(
+  notebookId: string,
+  sessionId: string,
+): Promise<UsageTotals | null> {
+  const current = await sessionUsage(sessionId);
+  return current ? recordUsage(notebookId, sessionId, current) : null;
+}
+
 export interface UpdateNotebookInput {
   title?: string;
   icon?: string;
@@ -197,6 +239,11 @@ export async function updateNotebook(
 
   await notebooks.updateNotebook(notebook.id, patch);
 
+  // After the patch, never before: clearing `sessionId` is what makes a relay
+  // still writing snapshots for the old session start failing the repository's
+  // guard, so the roll-up runs against a `current` that has stopped moving.
+  const usage = conversationReset ? await notebooks.retireSessionUsage(notebook.id) : null;
+
   return {
     notebook: {
       ...notebook,
@@ -208,6 +255,7 @@ export async function updateNotebook(
       model,
       sessionId: conversationReset ? null : notebook.sessionId,
       sessionStatus: conversationReset ? null : notebook.sessionStatus,
+      ...(usage ? { usage } : {}),
     },
     conversationReset,
   };
