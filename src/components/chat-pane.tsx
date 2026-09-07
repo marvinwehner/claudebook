@@ -120,11 +120,14 @@ export function ChatPane({
   stream,
   hasSources,
   initialUsage,
+  modelSelect,
 }: {
   notebookId: string;
   stream: StreamState;
   hasSources: boolean;
   initialUsage: UsageTotals;
+  /** The model picker, rendered in the composer's action row beside Send. */
+  modelSelect: React.ReactNode;
 }) {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -248,7 +251,8 @@ export function ChatPane({
               </span>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {modelSelect}
               {stream.isRunning ? (
                 <Button
                   size="sm"

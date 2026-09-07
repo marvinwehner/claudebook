@@ -35,7 +35,7 @@ export default async function NotebookPage({ params }: PageProps<"/notebooks/[id
 
   return (
     <div className="flex h-dvh flex-col">
-      <AppNav email={user.email} />
+      <AppNav user={user} />
       <NotebookWorkspace
         notebook={notebook}
         initialSources={sources}

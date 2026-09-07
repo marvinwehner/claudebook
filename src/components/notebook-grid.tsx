@@ -21,6 +21,7 @@ import { useState } from "react";
 import { DEFAULT_MODEL, NOTEBOOK_MODELS, OPUS_MODEL } from "@/lib/anthropic/agent";
 import { api, ApiError } from "@/lib/api/client";
 import type { Notebook } from "@/lib/firestore/notebooks";
+import { formatDate } from "@/lib/format";
 import { DEFAULT_NOTEBOOK_ICON } from "@/lib/notebook-icons";
 import { IconPicker } from "@/components/icon-picker";
 import { NotebookIcon } from "@/components/notebook-icon";
@@ -29,17 +30,6 @@ const MODEL_LABELS: Record<string, string> = {
   [DEFAULT_MODEL]: "Sonnet 5 — fast, the default",
   [OPUS_MODEL]: "Opus 5 — slower, better at hard questions",
 };
-
-// A fixed locale, not the runtime default: the server's default is en-US and the
-// browser's is the visitor's own, so `undefined` here renders "Sep 6, 2026" into the
-// HTML and "6 Sept 2026" on hydration. The UI is English-only, so pin it.
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export function NotebookGrid({ initialNotebooks }: { initialNotebooks: Notebook[] }) {
   const router = useRouter();

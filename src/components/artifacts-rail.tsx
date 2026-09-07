@@ -84,9 +84,9 @@ export function ArtifactsRail({
         </h2>
         {loading ? (
           <Spinner size="sm" />
-        ) : (
+        ) : artifacts.length > 0 ? (
           <span className="text-muted text-xs">{artifacts.length}</span>
-        )}
+        ) : null}
       </div>
 
       <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">

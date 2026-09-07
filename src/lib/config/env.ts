@@ -3,24 +3,23 @@ import { z } from "zod";
 /**
  * Environment access.
  *
- * Validation is LAZY on purpose. `ANTHROPIC_API_KEY` and `ALLOWED_EMAILS` are
+ * Validation is LAZY on purpose. `ANTHROPIC_API_KEY` and `ADMIN_EMAILS` are
  * RUNTIME-only on App Hosting (see apphosting.yaml), so they are absent while
  * `next build` runs. Validating at module scope would fail every build.
  */
 
-const serverSchema = z
-  .object({
-    ANTHROPIC_API_KEY: z.string().min(1),
-    ANTHROPIC_AGENT_ID: z.string().min(1),
-    ANTHROPIC_ENVIRONMENT_ID: z.string().min(1),
-    ALLOWED_EMAILS: z.string().default(""),
-    ALLOWED_DOMAINS: z.string().default(""),
-  })
-  // An allowlist empty on both sides locks every user out. Fail loudly on the
-  // first request rather than refusing legitimate sign-ins one at a time.
-  .refine((env) => env.ALLOWED_EMAILS.trim() !== "" || env.ALLOWED_DOMAINS.trim() !== "", {
-    message: "at least one of ALLOWED_EMAILS or ALLOWED_DOMAINS must be non-empty",
-  });
+const serverSchema = z.object({
+  ANTHROPIC_API_KEY: z.string().min(1),
+  ANTHROPIC_AGENT_ID: z.string().min(1),
+  ANTHROPIC_ENVIRONMENT_ID: z.string().min(1),
+  // Deliberately unconstrained. This used to carry the whole allowlist and a
+  // refinement rejecting an empty one, because empty meant nobody could sign
+  // in. The allowlist now lives in Firestore, so empty means "no admins" — the
+  // invited users still work and it is a YAML edit to fix. A failed parse here
+  // invalidates the whole object and is never cached (see `serverEnv`), so the
+  // refinement would have taken down every Anthropic call with it.
+  ADMIN_EMAILS: z.string().default(""),
+});
 
 const publicSchema = z.object({
   NEXT_PUBLIC_FIREBASE_API_KEY: z.string().min(1),
@@ -36,7 +35,7 @@ let serverCache: ServerEnv | undefined;
 let publicCache: PublicEnv | undefined;
 
 function fail(scope: string, error: z.ZodError): never {
-  // Object-level refinements carry no path, so fall back to their message.
+  // A pathless issue carries only a message, so fall back to that.
   const missing = error.issues
     .map((i) => (i.path.length ? i.path.join(".") : i.message))
     .join(", ");

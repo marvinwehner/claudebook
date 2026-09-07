@@ -1,4 +1,6 @@
+import type { Access } from "@/lib/auth/allowlist-service";
 import type { Artifact } from "@/lib/anthropic/files";
+import type { AllowedUser } from "@/lib/firestore/allowed-users";
 import type { Notebook } from "@/lib/firestore/notebooks";
 import type { Source } from "@/lib/firestore/sources";
 
@@ -99,5 +101,21 @@ export const api = {
 
   artifactUrl(id: string, fileId: string) {
     return `/api/notebooks/${id}/artifacts/${fileId}`;
+  },
+
+  listAccess() {
+    return request<Access>("/api/admin/allowed-users");
+  },
+
+  inviteUser(email: string) {
+    return request<{ allowedUser: AllowedUser }>("/api/admin/allowed-users", json({ email }));
+  },
+
+  // The address goes in the body, not the path, so it stays out of access logs.
+  revokeUser(email: string) {
+    return request<{ ok: true }>("/api/admin/allowed-users", {
+      ...json({ email }),
+      method: "DELETE",
+    });
   },
 };

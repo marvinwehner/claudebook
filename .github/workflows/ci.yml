@@ -26,7 +26,7 @@ jobs:
 
       # `next build` reads NEXT_PUBLIC_* at build time. These are public values
       # (the same ones in apphosting.yaml); the build never needs a secret,
-      # because ANTHROPIC_API_KEY and ALLOWED_EMAILS are RUNTIME-only and
+      # because ANTHROPIC_API_KEY and ADMIN_EMAILS are RUNTIME-only and
       # src/lib/config/env.ts validates lazily for exactly this reason.
       - run: npm run build
         env:

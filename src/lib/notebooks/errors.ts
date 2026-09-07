@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { UnauthorizedError } from "@/lib/auth/dal";
+import { ForbiddenError, UnauthorizedError } from "@/lib/auth/dal";
 
 /**
  * "Not found" covers both a missing notebook and one owned by someone else.
@@ -31,6 +31,11 @@ export class ConflictError extends Error {
 export function toErrorResponse(error: unknown): NextResponse {
   if (error instanceof UnauthorizedError) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  }
+  // Admin endpoints only. Never throw this from a notebook path — NotFoundError
+  // is the answer there, because a 403 confirms the id exists.
+  if (error instanceof ForbiddenError) {
+    return NextResponse.json({ error: error.message }, { status: 403 });
   }
   if (error instanceof NotFoundError) {
     return NextResponse.json({ error: error.message }, { status: 404 });

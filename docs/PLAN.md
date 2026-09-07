@@ -142,7 +142,7 @@ contradict what a 2025-era tutorial would tell you.
 ```
 Browser ──__session cookie──► Next.js on Cloud Run (App Hosting, europe-west4)
   │                             │  server layout   → requireUser() or redirect('/login')
-  │                             │  lib/auth/dal    → verifySessionCookie + allowlist  ◄── EVERY handler
+  │                             │  lib/auth/dal    → verifySessionCookie + access     ◄── EVERY handler
   │                             │  lib/notebooks/  → domain services
   │                             ├──► Firestore (Admin SDK)  notebooks + source index  [ownership truth]
   │                             └──► Anthropic API          agent, environment, sessions, files
@@ -157,7 +157,7 @@ Browser ──__session cookie──► Next.js on Cloud Run (App Hosting, europ
 | Services          | `src/lib/notebooks/*.ts`  | Domain logic; the only place Firestore and Anthropic combine       |
 | Repositories      | `src/lib/firestore/*.ts`  | Typed Firestore access + converters                                |
 | Anthropic gateway | `src/lib/anthropic/*.ts`  | Thin typed wrapper over the SDK; provisioning; event normalisation |
-| Auth              | `src/lib/auth/*.ts`       | `server-only` DAL, allowlist, session cookie mint/verify           |
+| Auth              | `src/lib/auth/*.ts`       | `server-only` DAL, access rules, session cookie mint/verify        |
 
 Rule: a route handler never imports the Anthropic SDK or `firebase-admin` directly.
 
@@ -173,6 +173,9 @@ notebooks/{notebookId}
 notebooks/{notebookId}/sources/{sourceId}
   filename, mimeType, sizeBytes, mountPath,
   anthropicFileId, sessionResourceId, status, createdAt
+
+allowedUsers/{normalizedEmail}          ◄── the email IS the doc id
+  email, invitedByEmail, invitedByUid, createdAt
 ```
 
 Artifacts are **not** mirrored — they are listed live from `files.list({ scope_id })`. One less thing
@@ -285,22 +288,23 @@ RUNTIME-only secret; `NEXT_PUBLIC_FIREBASE_*` at BUILD+RUNTIME), `apphosting.emu
 `firestore.indexes.json`, `next.config.ts` (`serverExternalPackages: ['firebase-admin']`, no
 `cacheComponents`), `postcss.config.mjs`, `src/app/globals.css` (tailwind → heroui → streamdown
 `@source` → HeroUI-token shim), `eslint.config.mjs`, `.env.local.example`, `engines.node: "22"`, and
-`src/lib/config/env.ts` — zod-validated **lazily**, because `ALLOWED_EMAILS` is RUNTIME-only and absent
+`src/lib/config/env.ts` — zod-validated **lazily**, because `ADMIN_EMAILS` is RUNTIME-only and absent
 during `next build`.
 
 **Verify:** `npm run build` and `npm run lint` pass; `firebase deploy --only firestore` succeeds.
 
 ### 3. Auth
 
-`lib/firebase/admin.ts` (ADC), `lib/firebase/client.ts` (auth only), `lib/auth/allowlist.ts`
-(`ALLOWED_EMAILS` + optional `ALLOWED_DOMAINS`), `lib/auth/dal.ts` (`getSession` wrapped in React
-`cache()`, `requireUser()`), `app/api/auth/session/route.ts` (POST: Origin check → `verifyIdToken` →
-require `google.com` + `email_verified` → allowlist → `createSessionCookie` → `__session` cookie,
+`lib/firebase/admin.ts` (ADC), `lib/firebase/client.ts` (auth only), `lib/auth/access.ts`
+(`ADMIN_EMAILS` + `normalizeEmail`; **superseded** — see "Access moved to Firestore" in TASKS.md),
+`lib/auth/dal.ts` (`getSession` wrapped in React
+`cache()`, `requireUser()`, `requireAdmin()`), `app/api/auth/session/route.ts` (POST: Origin check → `verifyIdToken` →
+require `google.com` + `email_verified` → admin-or-invited → `createSessionCookie` → `__session` cookie,
 httpOnly/secure/lax/5 days; refuse with 403 and `deleteUser` otherwise. DELETE: revoke + clear),
 `app/(app)/layout.tsx` (server component: `requireUser()` or `redirect('/login')`),
 `app/login/page.tsx` (`signInWithPopup`, handling `popup-blocked`/`popup-closed-by-user`).
 
-**Verify:** an allowlisted account reaches `/`; a non-allowlisted Google account gets a clear refusal,
+**Verify:** an admin or invited account reaches `/`; any other Google account gets a clear refusal,
 no cookie, and no lingering Firebase user record; `/api/*` returns 401 without a cookie.
 
 ### 4. Anthropic gateway + provisioning
@@ -347,7 +351,7 @@ GitHub Actions workflow running lint/typecheck/build on pull requests as a quali
 - **Local**: `npm run dev` with `.env.local`; Firestore emulator for repository tests. Anthropic calls
   hit the real API — there is no emulator for it.
 - **Rules**: `@firebase/rules-unit-testing` proving no collection is client-readable.
-- **Unit**: `allowlist`, `normalizeEvent`, and the SSE cursor codec — the three pieces with real logic
+- **Unit**: `access`, `normalizeEvent`, and the SSE cursor codec — the three pieces with real logic
   and no I/O.
 - **End-to-end in prod** after the first rollout: sign in → create notebook → upload a PDF → ask a
   grounded question → generate an artifact → download it → delete the notebook, confirming the

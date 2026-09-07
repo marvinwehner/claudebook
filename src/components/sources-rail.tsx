@@ -88,7 +88,7 @@ export function SourcesRail({
           <Files aria-hidden className="text-muted size-4" />
           Sources
         </h2>
-        <span className="text-muted text-xs">{sources.length}</span>
+        {sources.length > 0 ? <span className="text-muted text-xs">{sources.length}</span> : null}
       </div>
 
       <div className="px-4 pb-3">

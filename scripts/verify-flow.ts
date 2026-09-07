@@ -21,7 +21,9 @@ import {
 } from "@/lib/notebooks/notebook-service";
 import { addSource, listSources, removeSource } from "@/lib/notebooks/source-service";
 import { downloadNotebookArtifact, listNotebookArtifacts } from "@/lib/notebooks/artifact-service";
-import { NotFoundError } from "@/lib/notebooks/errors";
+import { ConflictError, NotFoundError, ValidationError } from "@/lib/notebooks/errors";
+import { invite, listAccess, revoke } from "@/lib/auth/allowlist-service";
+import { isEmailAllowed } from "@/lib/firestore/allowed-users";
 import { sendUserMessage } from "@/lib/anthropic/sessions";
 import { anthropic } from "@/lib/anthropic/client";
 import { isTurnComplete, normalizeEvent } from "@/lib/anthropic/events";
@@ -37,6 +39,8 @@ Fuel reserves at failure were 12.4 kilograms.
 
 This log does not record the probe's launch mass.
 `;
+
+const INVITEE = `verify-${Date.now()}@example.test`;
 
 const results: Array<[string, boolean, string?]> = [];
 
@@ -66,7 +70,64 @@ async function ask(sessionId: string, text: string): Promise<string> {
   return answer;
 }
 
+/**
+ * The allowlist lifecycle. No Anthropic calls, so this is free — and it is the
+ * only place the email-as-document-id encoding gets exercised against real
+ * Firestore, which is exactly the bug class that passes every unit test.
+ */
+async function verifyAllowlist() {
+  console.log("0. allowlist");
+  const actor = { uid: OWNER, email: "verify-owner@example.test", isAdmin: true };
+
+  check("an uninvited address is not allowed", !(await isEmailAllowed(INVITEE)));
+
+  try {
+    const invited = await invite(actor, `  ${INVITEE.toUpperCase()} `);
+    check("invite normalises case and padding", invited.email === INVITEE, invited.email);
+    check("invite records who did it", invited.invitedByEmail === actor.email);
+    check("an invited address is allowed", await isEmailAllowed(INVITEE));
+    check(
+      "the invite is listed",
+      (await listAccess()).invited.some((user) => user.email === INVITEE),
+    );
+
+    let duplicateRejected = false;
+    try {
+      await invite(actor, INVITEE);
+    } catch (error) {
+      duplicateRejected = error instanceof ConflictError;
+    }
+    check("re-inviting the same address is a conflict, not a silent overwrite", duplicateRejected);
+
+    let badRejected = false;
+    try {
+      // A legal address, but a slash would address a subcollection rather than
+      // fail — the reason normalizeEmail exists at all.
+      await invite(actor, '"a/b"@example.test');
+    } catch (error) {
+      badRejected = error instanceof ValidationError;
+    }
+    check("an address that is not a usable document id is rejected", badRejected);
+  } finally {
+    await revoke(INVITEE).catch((error: unknown) => {
+      console.error(`  CLEANUP FAILED - orphaned allowlist entry ${INVITEE}:`, error);
+    });
+  }
+
+  check("a revoked address is no longer allowed", !(await isEmailAllowed(INVITEE)));
+
+  let missingRejected = false;
+  try {
+    await revoke(INVITEE);
+  } catch (error) {
+    missingRejected = error instanceof NotFoundError;
+  }
+  check("revoking an address that is not on the list is a 404", missingRejected);
+}
+
 async function main() {
+  await verifyAllowlist();
+
   console.log(`owner=${OWNER}\n`);
 
   console.log("1. create");

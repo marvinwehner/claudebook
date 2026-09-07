@@ -18,10 +18,12 @@ streaming relay over that session.
 
 **https://claudebook--claudebook-lm.europe-west4.hosted.app**
 
-Sign-in is Google only, and the address must be on the allowlist (`ALLOWED_EMAILS` /
-`ALLOWED_DOMAINS` in `apphosting.yaml`) — everyone else gets bounced at `/login`. The allowlist is
-re-checked on every request, not just at sign-in, so removing an address takes effect immediately.
-If both lists are empty, nobody gets in; it fails closed on purpose.
+Sign-in is Google only, and the address has to be either an admin (`ADMIN_EMAILS` in
+`apphosting.yaml`) or invited — everyone else gets bounced at `/login`. Admins can always sign in
+and manage the invite list from the account menu in the header; invited addresses live in
+Firestore's `allowedUsers`, so adding someone is no longer a redeploy. Access is re-checked on
+every request, not just at sign-in, so revoking someone takes effect immediately. It fails closed
+in every direction: an empty `ADMIN_EMAILS` means no admins, not everyone.
 
 ## What it does
 

@@ -34,7 +34,9 @@ env:
     availability:
       - RUNTIME
 
-  - variable: ALLOWED_EMAILS
+  # Admins can always sign in and manage the invite list in-app. Everyone else
+  # lives in Firestore's allowedUsers, so adding a user is no longer a redeploy.
+  - variable: ADMIN_EMAILS
     value: marvin.wehner@gmx.de
     availability:
       - RUNTIME

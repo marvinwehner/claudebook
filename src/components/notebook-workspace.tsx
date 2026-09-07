@@ -12,6 +12,7 @@ import type { Source } from "@/lib/firestore/sources";
 import type { UsageTotals } from "@/lib/usage";
 import { ArtifactsRail } from "@/components/artifacts-rail";
 import { ChatPane } from "@/components/chat-pane";
+import { ModelSelect } from "@/components/model-select";
 import { NotebookIcon } from "@/components/notebook-icon";
 import { NotebookSettings } from "@/components/notebook-settings";
 import { SourcesRail } from "@/components/sources-rail";
@@ -84,14 +85,7 @@ export function NotebookWorkspace({
           <h1 className="truncate text-sm font-medium">{notebook.title}</h1>
         </div>
 
-        <NotebookSettings
-          notebook={notebook}
-          onConversationReset={() => {
-            // The old session is archived; its transcript and its artifacts
-            // are gone. Reloading is the honest way to show that.
-            window.location.reload();
-          }}
-        />
+        <NotebookSettings notebook={notebook} />
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3">
@@ -101,6 +95,16 @@ export function NotebookWorkspace({
           stream={stream}
           hasSources={sources.length > 0}
           initialUsage={initialUsage}
+          modelSelect={
+            <ModelSelect
+              notebook={notebook}
+              onConversationReset={() => {
+                // The old session is archived; its transcript and its artifacts
+                // are gone. Reloading is the honest way to show that.
+                window.location.reload();
+              }}
+            />
+          }
         />
         <ArtifactsRail notebookId={notebook.id} artifacts={artifacts} loading={loadingArtifacts} />
       </div>

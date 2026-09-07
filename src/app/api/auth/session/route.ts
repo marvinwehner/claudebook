@@ -2,9 +2,10 @@ import { cookies, headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { isAllowedEmail } from "@/lib/auth/allowlist";
+import { isAdminEmail } from "@/lib/auth/access";
 import { SESSION_COOKIE, SESSION_MAX_AGE_MS } from "@/lib/auth/dal";
 import { adminAuth } from "@/lib/firebase/admin";
+import { isEmailAllowed } from "@/lib/firestore/allowed-users";
 
 const bodySchema = z.object({ idToken: z.string().min(1) });
 
@@ -72,14 +73,30 @@ export async function POST(request: Request) {
   // Google is the only configured provider; anything else means someone found
   // another way into the Identity Platform tenant.
   const provider = claims.firebase?.sign_in_provider;
-  const acceptable =
-    provider === "google.com" && claims.email_verified === true && isAllowedEmail(claims.email);
+  const authentic = provider === "google.com" && claims.email_verified === true;
 
-  if (!acceptable) {
+  // Separate from the refusal below, and separate from the 403, because these
+  // are different things that must not read the same to the person signing in.
+  // An admin short-circuits the read, so a Firestore outage still lets the
+  // person who would fix it in.
+  let allowed = false;
+  if (authentic) {
+    try {
+      allowed = isAdminEmail(claims.email) || (await isEmailAllowed(claims.email));
+    } catch (error) {
+      console.error("Allowlist lookup failed during sign-in:", error);
+      return NextResponse.json(
+        { error: "Could not verify access right now. Please try again." },
+        { status: 503 },
+      );
+    }
+  }
+
+  if (!authentic || !allowed) {
     // The refused account is left in place deliberately. Refusing to mint a
-    // cookie is the control — the DAL re-checks the allowlist on every request,
-    // so an account that is not on it can do nothing — and deleting the uid
-    // would orphan the notebooks, sources and Anthropic files keyed to it.
+    // cookie is the control — the DAL re-checks access on every request, so an
+    // account that is not allowed can do nothing — and deleting the uid would
+    // orphan the notebooks, sources and Anthropic files keyed to it.
     return NextResponse.json(
       { error: "This Google account is not on the Claudebook allowlist." },
       { status: 403 },

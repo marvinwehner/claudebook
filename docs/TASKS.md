@@ -208,11 +208,13 @@ is the only credential-shaped value ever committed.
       **Patch with `updateMask=restrictions.browserKeyRestrictions`** — `browserKeyRestrictions` is a
       oneof but `apiTargets` is a sibling field, so an unscoped update silently wipes all 27 targets.
       Needed `gcloud services enable apikeys.googleapis.com` first.
-- [ ] **Blocker before making the repo public again:** `marvin.wehner@gmx.de` is in four tracked
-      files (`apphosting.yaml`, `apphosting.emulator.yaml`, `.env.local.example`,
-      `src/lib/auth/allowlist.test.ts`). Not a credential, but public means scraped, and it names the
-      exact account an attacker must compromise to pass the allowlist. Move `ALLOWED_EMAILS` to
-      Secret Manager alongside `anthropic-api-key`, and use a fake address in the test and example.
+- [ ] **Blocker before making the repo public again:** `marvin.wehner@gmx.de` was in four tracked
+      files. **Narrowed, not closed** — see "Access moved to Firestore" below. The test and
+      `.env.local.example` now use fake addresses, and the variable is `ADMIN_EMAILS`, but
+      `apphosting.yaml` and `apphosting.emulator.yaml` still carry the real one. It names the exact
+      account an attacker must compromise to reach admin. Remaining work: move `ADMIN_EMAILS` to
+      Secret Manager alongside `anthropic-api-key` — note that pins the value at build, so changing
+      admins would need a rollout.
 
 ### Corrections to PLAN.md found in this phase
 
@@ -311,7 +313,8 @@ Three of them contradict things recorded here or in PLAN.md:
   re-checks the allowlist on every request, and deleting the uid orphaned the notebooks,
   sources and Anthropic files keyed to it — so a typo in `ALLOWED_EMAILS` destroyed real data.
   `serverEnv()` now also rejects an allowlist empty on both sides, so that misconfiguration
-  fails loudly instead of one refused sign-in at a time.
+  fails loudly instead of one refused sign-in at a time. **No longer true** — that refinement was
+  removed when access moved to Firestore; see below for why it was the wrong lever.
 - **"A notebook with custom instructions loses the outputs-dir rule" is fixed.** `createSession`
   now sends `AGENT_SYSTEM_PROMPT` with the owner's instructions appended and framed as
   subordinate, rather than replacing the prompt outright.
@@ -442,6 +445,84 @@ totals with `current` reset against the new session id.
       `session.usage` event carries `budget` alongside the spend, and `sessions.update`
       takes a new cap), but it still needs a decision on who may raise one, given that
       removal is one-way.
+
+---
+
+## Access moved to Firestore, with an admin UI
+
+The allowlist was `ALLOWED_EMAILS` in `apphosting.yaml`, so inviting anyone meant editing YAML and
+redeploying. Now `ADMIN_EMAILS` holds admins only; everyone else is a row in `allowedUsers` that an
+admin manages from the account menu in the header. `ALLOWED_DOMAINS` is gone entirely.
+
+- [x] `lib/auth/access.ts` replaces `allowlist.ts` — `parseList`, `normalizeEmail`,
+      `isAdmin(email, admins)` + `isAdminEmail()`. The list is an argument on the pure one because
+      `serverEnv()` memoises the first `process.env` it sees and a test cannot vary it otherwise.
+- [x] **The email IS the `allowedUsers` document id.** A new precedent — every other repo here uses
+      auto-ids — and it is what makes the per-request check a point read rather than a query, and
+      duplicates impossible by construction. `normalizeEmail` is the single gate, called by the
+      repository on every id it touches as well as by the service, because a write path and a read
+      path that disagree on the key is a silent lockout with no error anywhere.
+- [x] Checked `z.email()` against the hazards rather than assuming. Zod 4's pattern is stricter than
+      the RFC and does most of the work: ASCII-only (so an accented address cannot arrive NFC in one
+      write and NFD in another and land in two documents), and it rejects quoted local parts
+      (`"a/b"@x.test` — a legal address whose slash would make `doc()` address a **subcollection**
+      rather than fail), a leading dot, and `..`. Only the 254-char cap and Firestore's reserved
+      `__…__` ids had to be added on top.
+- [x] **`+` aliases and Gmail dots are deliberately not canonicalised.** Folding `victim+x@gmail.com`
+      into `victim@gmail.com` would let an admin grant access to an address they never typed. Not
+      folding fails closed and is merely surprising.
+- [x] `addAllowedUser` uses `ref.create()`, not `set()`. With the email as the id, a `set()` would
+      silently overwrite the `invitedBy`/`createdAt` provenance the row exists to display; `create()`
+      throws gRPC `ALREADY_EXISTS` (code 6), which the service maps to `ConflictError` → 409.
+- [x] `requireAdmin()` + `ForbiddenError` → a **403 branch in `toErrorResponse`**, which had none.
+      That does not contradict the 404-not-403 rule: that rule stops a notebook handler confirming an
+      id exists, and `/api/admin/*` has a fixed path that leaks nothing.
+- [x] `DELETE /api/admin/allowed-users` takes `{ email }` in the **body**, not a `[email]` path
+      segment. Cloud Logging records the full request path, and an invited user's address in a log
+      line is the same leak the blocker above is about. It also means no generated `RouteContext`.
+- [x] UI: `user-menu.tsx` (avatar → Dropdown) replaces `sign-out-button.tsx`, which is deleted; the
+      email moved out of the header into the menu; `allowed-users-dialog.tsx` lists admins as a
+      non-removable group above the invited rows.
+- [x] Verified `next build` still succeeds with every server secret blank. That property was at risk
+      (see the DAL note below) and CI depends on it.
+- [x] `verify-flow.ts` gained an allowlist lifecycle block — invite / list / conflict / reject /
+      revoke against real Firestore, at **zero Anthropic spend**. Doc-id encoding is exactly the bug
+      class that passes every unit test.
+
+### Two things this got wrong on the first pass
+
+- **The Firestore read must sit OUTSIDE `getSessionUser`'s try/catch.** That catch turns everything
+  into "not signed in", which is right for a bad cookie and very wrong for a Firestore outage: the
+  user would be bounced to `/login`, sign-in would hit the same failure at `session/route.ts`, and —
+  because that call is not in a try either — return a 500 whose HTML body `login/page.tsx` cannot
+  parse, leaving them told **"Sign-in was refused."** An infra blip would have been indistinguishable
+  from revocation. The read is now outside the try, and the sign-in gate has its own try returning
+  **503**, distinct from the 403.
+- **Keeping a non-empty refinement on `ADMIN_EMAILS` would have been worse than the problem.** A
+  failed parse invalidates the whole object and `serverEnv()` never caches a failure, so it re-throws
+  forever — and its other callers are `anthropic/client.ts`, so an unset `ADMIN_EMAILS` would have
+  taken down every Anthropic call. The coupling was defensible when empty meant nobody could sign in.
+  It is not now that empty just means no admins, which is recoverable and leaves invited users
+  working.
+
+### What this contradicts in PLAN.md
+
+- **The allowlist is no longer an env var.** PLAN.md's auth phase, its architecture diagram, the
+  layering table's Auth row and the data-model block have all been amended, and the auth phase now
+  points here. This overturns a settled decision, at the user's request — recorded rather than
+  quietly re-decided.
+- **`ALLOWED_DOMAINS` is gone.** Nothing ever used it; it was empty in every config.
+
+### Known limits, accepted
+
+- **An open SSE stream survives a revocation by up to `SELF_CLOSE_MS` (4 min).** The relay
+  authenticates once at connect; the reconnect is what denies. True before this change too, but it
+  becomes visible now that revoking is a button a human presses and watches. The 15s heartbeat is the
+  cheap hook if it ever matters.
+- **CI has probably never gone green.** `ci.yml` runs `typecheck` before `build`, but
+  `RouteContext`/`PageProps`/`LayoutProps` exist only under `.next/`, which is gitignored — so on a
+  fresh checkout `npm run typecheck` fails on the ten existing files that use them. Pre-existing and
+  unrelated to this change, so **left untouched**; the fix is to move `build` above `typecheck`.
 
 ---
 
