@@ -176,7 +176,8 @@ format` script.
       prompts for GitHub App authorization. Now linked to `mavonic/claudebook`, branch `main`.
 - [ ] **Spike:** deploy a trivial SSE route and confirm App Hosting does not buffer it
 - [x] First rollout — "Rollout complete", serving at the URL above.
-- [ ] Confirm auto-deploy fires on push to `main`
+- [x] Confirm auto-deploy fires on push to `main`. Verified twice: 7–30s before the GitHub
+      rename, and 4s after repointing the Developer Connect link (see the 2026-09-07 section).
 - [x] Add `claudebook--claudebook-lm.europe-west4.hosted.app` to Firebase Auth authorized domains.
       **It is not automatic** — PLAN.md flagged this as a risk and was right. Added additively via
       the Identity Toolkit admin API under ADC; the list is now localhost, `*.firebaseapp.com`,
